@@ -103,6 +103,8 @@ def betterEvaluationFunction(currentGameState):
     else :
         score +=  sumGhostDistance + numberofPowerPellets
     return score
+# Abbreviation
+better = betterEvaluationFunction
 
 class RandomAgent(Agent):
     """
@@ -118,6 +120,93 @@ class RandomAgent(Agent):
         legalMoves = gameState.getLegalActions()
         return random.choice(legalMoves)
 
-# Abbreviation
-better = betterEvaluationFunction
+class NaiveAgent(Agent):
+    """
+    Naively chooses best action at each state
+    Currently using code from ReflexAgent
+    """
 
+    def naiveEval(self, currentGameState, action):
+        """
+        Design a better evaluation function here.
+
+        The evaluation function takes in the current and proposed successor
+        GameStates (pacman.py) and returns a number, where higher numbers are better.
+
+        The code below extracts some useful information from the state, like the
+        remaining food (newFood) and Pacman position after moving (newPos).
+        newScaredTimes holds the number of moves that each ghost will remain
+        scared because of Pacman having eaten a power pellet.
+
+        Print out these variables to see what you're getting, then combine them
+        to create a masterful evaluation function.
+        """
+        # Useful information you can extract from a GameState (pacman.py)
+        successorGameState = currentGameState.generatePacmanSuccessor(action)
+        newPos = successorGameState.getPacmanPosition()
+        newFood = successorGameState.getFood()
+        newGhostStates = successorGameState.getGhostStates()
+        newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
+
+        "*** YOUR CODE HERE ***"
+        # If successor state is a win state return very high score.
+        if successorGameState.isWin(): return 999999
+
+        """ Manhattan distance to the available foods from the successor state """
+        foodList = newFood.asList()
+        from util import manhattanDistance
+        foodDistance = [0]
+        for pos in foodList: foodDistance.append( manhattanDistance(newPos,pos) )
+            
+        """ Manhattan distance to each ghost in the game from successor state"""
+        ghostPos = []
+        for ghost in newGhostStates: ghostPos.append(ghost.getPosition())
+        ghostDistance = []
+        for pos in ghostPos: ghostDistance.append(manhattanDistance(newPos,pos))
+
+        """ Manhattan distance to each ghost in the game from current state"""
+        ghostPosCurrent = []
+        for ghost in currentGameState.getGhostStates(): ghostPosCurrent.append(ghost.getPosition())
+        ghostDistanceCurrent = []
+        for pos in ghostPosCurrent: ghostDistanceCurrent.append(manhattanDistance(newPos,pos))
+
+        score = 0
+        # Get Number of food available in successor state
+        numberOfFoodLeft = len(foodList)
+        # Get Number of food available in current state
+        numberOfFoodLeftCurrent = len(currentGameState.getFood().asList())
+        # Get Number of Power Pellets available in successor state
+        numberofPowerPellets = len(successorGameState.getCapsules())
+        # Get state of ghosts in successor state
+        sumScaredTimes = sum(newScaredTimes)
+            
+        #Relative Score    
+        score += successorGameState.getScore() - currentGameState.getScore()
+        if action == Directions.STOP: score -= 10
+            
+        # Add Score if pacman eats power pellet in next state.
+        if newPos in currentGameState.getCapsules(): score += 150 * numberofPowerPellets
+        # Add score if there are lesser number of food available in successor state.
+        if numberOfFoodLeft < numberOfFoodLeftCurrent: score += 200
+
+        # For each food left subtract 10 score.     
+        score -= 10 * numberOfFoodLeft
+
+        # If ghosts are scared lesser distance to ghosts is better.
+        if sumScaredTimes > 0 :
+            if min(ghostDistanceCurrent) < min(ghostDistance): score += 200
+            else: score -=100
+        # If ghosts are not scared greater distance to ghosts is better.
+        else:
+            if min(ghostDistanceCurrent) < min(ghostDistance): score -= 100
+            else: score += 200
+        
+        return score
+
+    def getAction(self, gameState):
+        legalMoves = gameState.getLegalActions()
+        scores = [self.naiveEval(gameState, action) for action in legalMoves]
+        bestScore = max(scores)
+        bestIndices = [index for index in range(len(scores)) if scores[index] == bestScore]
+        chosenIndex = random.choice(bestIndices) # Pick randomly among the best
+        return legalMoves[chosenIndex]
