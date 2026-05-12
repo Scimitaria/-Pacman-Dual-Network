@@ -4,7 +4,12 @@ Artificial Intelligence project designed by UC Berkeley to develop game agents f
 Run with
 ```python pacman.py```
 
-# PacmanAI
+## Files:
+pacman.py, game.py: implementations for Pacman framework
+keyboardAgents.py : agents for interactive play via keyboard
+multiAgents.py    : AI agents
+
+# PacmanAI (original desc)
 Project Link :
 http://ai.berkeley.edu/project_overview.html
 
