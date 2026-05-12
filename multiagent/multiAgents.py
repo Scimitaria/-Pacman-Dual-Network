@@ -19,132 +19,23 @@ import random, util
 
 from game import Agent
 
-class ReflexAgent(Agent):
+class NaiveAgent(Agent):
     """
-      A reflex agent chooses an action at each choice point by examining
-      its alternatives via a state evaluation function.
-
-      The code below is provided as a guide.  You are welcome to change
-      it in any way you see fit, so long as you don't touch our method
-      headers.
+      Randomly chooses an action.
     """
 
 
     def getAction(self, gameState):
         """
-        You do not need to change this method, but you're welcome to.
-
-        getAction chooses among the best options according to the evaluation function.
-
         Just like in the previous project, getAction takes a GameState and returns
         some Directions.X for some X in the set {North, South, West, East, Stop}
         """
         # Collect legal moves and successor states
         legalMoves = gameState.getLegalActions()
 
-        # Choose one of the best actions
-        scores = [self.evaluationFunction(gameState, action) for action in legalMoves]
-        bestScore = max(scores)
-        bestIndices = [index for index in range(len(scores)) if scores[index] == bestScore]
-        chosenIndex = random.choice(bestIndices) # Pick randomly among the best
+        return random.choice(legalMoves)
 
-        "Add more of your code here if you want to"
-
-        return legalMoves[chosenIndex]
-
-    def evaluationFunction(self, currentGameState, action):
-        """
-        Design a better evaluation function here.
-
-        The evaluation function takes in the current and proposed successor
-        GameStates (pacman.py) and returns a number, where higher numbers are better.
-
-        The code below extracts some useful information from the state, like the
-        remaining food (newFood) and Pacman position after moving (newPos).
-        newScaredTimes holds the number of moves that each ghost will remain
-        scared because of Pacman having eaten a power pellet.
-
-        Print out these variables to see what you're getting, then combine them
-        to create a masterful evaluation function.
-        """
-        # Useful information you can extract from a GameState (pacman.py)
-        successorGameState = currentGameState.generatePacmanSuccessor(action)
-        newPos = successorGameState.getPacmanPosition()
-        newFood = successorGameState.getFood()
-        newGhostStates = successorGameState.getGhostStates()
-        newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
-
-        "*** YOUR CODE HERE ***"
-        # If successor state is a win state return very high score.
-        if successorGameState.isWin():
-            return 999999
-
-        """ Manhattan distance to the available foods from the successor state """
-        foodList = newFood.asList()
-        from util import manhattanDistance
-        foodDistance = [0]
-        for pos in foodList:
-            foodDistance.append( manhattanDistance(newPos,pos) )
-            
-        """ Manhattan distance to each ghost in the game from successor state"""
-        ghostPos = []
-        for ghost in newGhostStates:
-            ghostPos.append(ghost.getPosition())
-
-        ghostDistance = []
-        for pos in ghostPos:
-            ghostDistance.append(manhattanDistance(newPos,pos))
-
-        """ Manhattan distance to each ghost in the game from current state"""
-        ghostPosCurrent = []
-        for ghost in currentGameState.getGhostStates():
-            ghostPosCurrent.append(ghost.getPosition())
-
-        ghostDistanceCurrent = []
-        for pos in ghostPosCurrent:
-            ghostDistanceCurrent.append(manhattanDistance(newPos,pos))
-
-        score = 0
-        # Get Number of food available in successor state
-        numberOfFoodLeft = len(foodList)
-        # Get Number of food available in current state
-        numberOfFoodLeftCurrent = len(currentGameState.getFood().asList())
-        # Get Number of Power Pellets available in successor state
-        numberofPowerPellets = len(successorGameState.getCapsules())
-        # Get state of ghosts in successor state
-        sumScaredTimes = sum(newScaredTimes)
-            
-        #Relative Score    
-        score += successorGameState.getScore() - currentGameState.getScore()
-        if action == Directions.STOP:
-            #Penalty for stop
-            score -= 10
-            
-        # Add Score if pacman eats power pellet in next state.
-        if newPos in currentGameState.getCapsules():
-            score += 150 * numberofPowerPellets
-        # Add score if there are lesser number of food available in successor state.
-        if numberOfFoodLeft < numberOfFoodLeftCurrent:
-            score += 200
-
-        # For each food left subtract 10 score.     
-        score -= 10 * numberOfFoodLeft
-
-        # If ghosts are scared lesser distance to ghosts is better.
-        if sumScaredTimes > 0 :
-            if min(ghostDistanceCurrent) < min(ghostDistance):
-                score += 200
-            else:
-                score -=100
-        # If ghosts are not scared greater distance to ghosts is better.
-        else:
-            if min(ghostDistanceCurrent) < min(ghostDistance):
-                score -= 100
-            else:
-                score += 200
-        
-        return score
-    
+ 
 def scoreEvaluationFunction(currentGameState):
     """
       This default evaluation function just returns the score of the state.
@@ -314,66 +205,6 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
 
         #util.raiseNotDefined()
 
-class ExpectimaxAgent(MultiAgentSearchAgent):
-    """
-      Your expectimax agent (question 4)
-    """
-
-    def getAction(self, gameState):
-        """
-          Returns the expectimax action using self.depth and self.evaluationFunction
-
-          All ghosts should be modeled as choosing uniformly at random from their
-          legal moves.
-        """
-        "*** YOUR CODE HERE ***"
-        #Used only for pacman agent hence agentindex is always 0.
-        def maxLevel(gameState,depth):
-            currDepth = depth + 1
-            if gameState.isWin() or gameState.isLose() or currDepth==self.depth:   #Terminal Test 
-                return self.evaluationFunction(gameState)
-            maxvalue = -999999
-            actions = gameState.getLegalActions(0)
-            totalmaxvalue = 0
-            numberofactions = len(actions)
-            for action in actions:
-                successor= gameState.generateSuccessor(0,action)
-                maxvalue = max (maxvalue,expectLevel(successor,currDepth,1))
-            return maxvalue
-        
-        #For all ghosts.
-        def expectLevel(gameState,depth, agentIndex):
-            if gameState.isWin() or gameState.isLose():   #Terminal Test 
-                return self.evaluationFunction(gameState)
-            actions = gameState.getLegalActions(agentIndex)
-            totalexpectedvalue = 0
-            numberofactions = len(actions)
-            for action in actions:
-                successor= gameState.generateSuccessor(agentIndex,action)
-                if agentIndex == (gameState.getNumAgents() - 1):
-                    expectedvalue = maxLevel(successor,depth)
-                else:
-                    expectedvalue = expectLevel(successor,depth,agentIndex+1)
-                totalexpectedvalue = totalexpectedvalue + expectedvalue
-            if numberofactions == 0:
-                return  0
-            return float(totalexpectedvalue)/float(numberofactions)
-        
-        #Root level action.
-        actions = gameState.getLegalActions(0)
-        currentScore = -999999
-        returnAction = ''
-        for action in actions:
-            nextState = gameState.generateSuccessor(0,action)
-            # Next level is a expect level. Hence calling expectLevel for successors of the root.
-            score = expectLevel(nextState,0,1)
-            # Choosing the action which is Maximum of the successors.
-            if score > currentScore:
-                returnAction = action
-                currentScore = score
-        return returnAction
-
-        #util.raiseNotDefined()
 
 def betterEvaluationFunction(currentGameState):
     """
