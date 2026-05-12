@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # PacmanAI
 
 Project Link :
@@ -20,7 +19,6 @@ Implement model-based and model-free reinforcement learning algorithms, applied 
 
 Ghostbusters: 
 Probabilistic inference in a hidden Markov model tracks the movement of hidden ghosts in the Pacman world. Implement exact inference using the forward algorithm and approximate inference via particle filters.
-=======
+
 # UC-Berkeley-AI-Pacman-Project
 Artificial Intelligence project designed by UC Berkeley to develop game agents for Pacman using search algorithms and reinforcement learning
->>>>>>> b747ae092562a96c8c2ac70466fc10707a0f6865
