@@ -496,7 +496,7 @@ def readCommand( argv ):
                       metavar='LAYOUT_FILE', default='mediumClassic')
     parser.add_option('-p', '--pacman', dest='pacman',
                       help=default('the agent TYPE in the pacmanAgents module to use'),
-                      metavar='TYPE', default='NaiveAgent')
+                      metavar='TYPE', default='RandomAgent')
     parser.add_option('-t', '--textGraphics', action='store_true', dest='textGraphics',
                       help='Display output as text only', default=False)
     parser.add_option('-q', '--quietTextGraphics', action='store_true', dest='quietGraphics',
@@ -575,9 +575,9 @@ def readCommand( argv ):
     # Special case: recorded games don't use the runGames method or args structure
     if options.gameToReplay != None:
         print ('Replaying recorded game %s.' % options.gameToReplay)
-        import cPickle
+        import pickle
         f = open(options.gameToReplay)
-        try: recorded = cPickle.load(f)
+        try: recorded = pickle.load(f)
         finally: f.close()
         recorded['display'] = args['display']
         replayGame(**recorded)
@@ -648,11 +648,11 @@ def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0
         if not beQuiet: games.append(game)
 
         if record:
-            import time, cPickle
+            import time, pickle
             fname = ('recorded-game-%d' % (i + 1)) +  '-'.join([str(t) for t in time.localtime()[1:6]])
-            f = file(fname, 'w')
+            f = open(fname, 'w')
             components = {'layout': layout, 'actions': game.moveHistory}
-            cPickle.dump(components, f)
+            pickle.dump(components, f)
             f.close()
 
     if (numGames-numTraining) > 0:
