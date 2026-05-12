@@ -5,9 +5,9 @@ Run with
 ```python pacman.py```
 
 ## Files:
-pacman.py, game.py: implementations for Pacman framework
-keyboardAgents.py : agents for interactive play via keyboard
-multiAgents.py    : AI agents
+pacman.py, game.py: implementations for Pacman framework.  
+keyboardAgents.py : agents for interactive play via keyboard.  
+multiAgents.py    : AI agents.  
 
 # PacmanAI (original desc)
 Project Link :
