@@ -20,6 +20,7 @@ import string
 import time
 import types
 import tkinter as Tkinter
+import _tkinter
 
 _Windows = sys.platform == 'win32'  # True if on Win95/98/NT
 
@@ -288,11 +289,12 @@ def _clear_keys(event=None):
     _keyswaiting = {}
     _got_release = None
 
-def keys_pressed(d_o_e=Tkinter.Tk().tk.dooneevent,
-                 d_w=Tkinter._tkinter.DONT_WAIT):
-    d_o_e(d_w)
+def keys_pressed(d_o_e=None,d_w=_tkinter.DONT_WAIT):
+    global _root_window
+    doe=d_o_e or _root_window.tk.dooneevent
+    doe(d_w)
     if _got_release:
-        d_o_e(d_w)
+        doe(d_w)
     return _keysdown.keys()
 
 def keys_waiting():
@@ -310,11 +312,11 @@ def wait_for_keys():
         sleep(0.05)
     return keys
 
-def remove_from_screen(x,
-                        d_o_e=Tkinter.Tk().tk.dooneevent,
-                        d_w=Tkinter._tkinter.DONT_WAIT):
+def remove_from_screen(x,d_o_e=None,d_w=_tkinter.DONT_WAIT):
+    global _root_window
+    doe=d_o_e or _root_window.tk.dooneevent
     _canvas.delete(x)
-    d_o_e(d_w)
+    doe(d_w)
 
 def _adjust_coords(coord_list, x, y):
     for i in range(0, len(coord_list), 2):
@@ -322,9 +324,10 @@ def _adjust_coords(coord_list, x, y):
         coord_list[i + 1] = coord_list[i + 1] + y
     return coord_list
 
-def move_to(object, x, y=None,
-            d_o_e=Tkinter.Tk().tk.dooneevent,
-            d_w=Tkinter._tkinter.DONT_WAIT):
+def move_to(object, x, y=None,d_o_e=None,d_w=_tkinter.DONT_WAIT):
+    global _root_window
+    doe=d_o_e or _root_window.tk.dooneevent
+
     if y is None:
         try: x, y = x
         except: raise  'incomprehensible coordinates'
@@ -342,11 +345,12 @@ def move_to(object, x, y=None,
         newCoords.append(coord + inc)
 
     _canvas.coords(object, *newCoords)
-    d_o_e(d_w)
+    doe(d_w)
 
-def move_by(object, x, y=None,
-            d_o_e=Tkinter.Tk().tk.dooneevent,
-            d_w=Tkinter._tkinter.DONT_WAIT, lift=False):
+def move_by(object, x, y=None,d_o_e=None,d_w=_tkinter.DONT_WAIT, lift=False):
+    global _root_window
+    doe=d_o_e or _root_window.tk.dooneevent
+
     if y is None:
         try: x, y = x
         except: raise Exception('incomprehensible coordinates')
@@ -363,7 +367,7 @@ def move_by(object, x, y=None,
         newCoords.append(coord + inc)
 
     _canvas.coords(object, *newCoords)
-    d_o_e(d_w)
+    doe(d_w)
     if lift:
         _canvas.tag_raise(object)
 
