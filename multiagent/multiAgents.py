@@ -148,7 +148,6 @@ class NaiveAgent(Agent):
         newGhostStates = successorGameState.getGhostStates()
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
-        "*** YOUR CODE HERE ***"
         # If successor state is a win state return very high score.
         if successorGameState.isWin(): return 999999
 
@@ -210,3 +209,11 @@ class NaiveAgent(Agent):
         bestIndices = [index for index in range(len(scores)) if scores[index] == bestScore]
         chosenIndex = random.choice(bestIndices) # Pick randomly among the best
         return legalMoves[chosenIndex]
+
+class AStarAgent(Agent):
+    """
+    Uses A* to find the next action
+    """
+
+    def getAction(self, state):
+        return super().getAction(state)
