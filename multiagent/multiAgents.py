@@ -259,8 +259,8 @@ class AStarAgent(Agent):
                 min_score_node = pos
         return min_score_node
 
-    def reconstruct_path(self,came_from,current):
-        path = []
+    def reconstruct_path(self,came_from,current,goal):
+        path = [goal]
         while current in came_from:
             current=came_from[current]
             path.insert(0,current)
@@ -284,19 +284,19 @@ class AStarAgent(Agent):
             #lowest cost node
             current = self.get_min_score_node(visited,f_score)
             if current == goal: 
-                path = self.reconstruct_path(came_from,current)
-                if len(path)==1: return posToMove(pos,path[0])
+                path = self.reconstruct_path(came_from,current,goal)
+                if len(path)==1: return posToMove(pos,path[1])
                 return posToMove(pos,path[1])
             visited.pop(current)
 
-            for neighbor in get_neighbors(current, state):
+            neighbors = get_neighbors(current, state)
+            for neighbor in neighbors:
                 tentative = g_score[current] + 1
                 if tentative < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative
                     f_score[neighbor] = tentative + manhattanDistance(neighbor, goal)
                     if not visited.contains(neighbor): visited.push(neighbor)
-
         raise StopIteration("A* did not reach the goal state")
 
     def getAction(self, state):
@@ -304,7 +304,7 @@ class AStarAgent(Agent):
         newFood = state.getFood()
         foodList = newFood.asList()
 
-        foodDistance = [0]
+        foodDistance = []
         for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
         closest = foodList[foodDistance.index(min(foodDistance))]
         return self.AStar(pacman,closest,state)
