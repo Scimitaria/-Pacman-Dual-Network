@@ -144,12 +144,19 @@ class Queue:
         "Enqueue the 'item' into the queue"
         self.list.insert(0,item)
 
-    def pop(self):
+    def pop(self,e=None):
         """
           Dequeue the earliest enqueued item still in the queue. This
           operation removes the item from the queue.
         """
-        return self.list.pop()
+        if not e: return self.list.pop()
+        return self.list.remove(e)
+
+    def size(self):
+        return len(self.list)
+
+    def contains(self,e):
+        return e in self.list
 
     def isEmpty(self):
         "Returns true if the queue is empty"
@@ -279,7 +286,7 @@ class Counter(dict):
         all = self.items()
         values = [x[1] for x in all]
         maxIndex = values.index(max(values))
-        return all[maxIndex][0]
+        return all[maxIndex][0] # type: ignore
 
     def sortedKeys(self):
         """
@@ -295,7 +302,7 @@ class Counter(dict):
         """
         sortedItems = self.items()
         compare = lambda x, y:  sign(y[1] - x[1])
-        sortedItems.sort(cmp=compare)
+        sortedItems.sort(cmp=compare) # type: ignore
         return [x[0] for x in sortedItems]
 
     def totalCount(self):
@@ -481,7 +488,7 @@ def sample(distribution, values = None):
     while choice > total:
         i += 1
         total += distribution[i]
-    return values[i]
+    return values[i] # type: ignore
 
 def sampleFromCounter(ctr):
     items = sorted(ctr.items())
@@ -576,7 +583,7 @@ def pause():
     Pauses the output stream awaiting user feedback.
     """
     print ("<Press enter/return to continue>")
-    raw_input()
+    raw_input() # type: ignore
 
 
 # code to handle timeouts

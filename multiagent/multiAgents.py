@@ -13,11 +13,46 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-from util import manhattanDistance
-from game import Directions
+from util import Queue, manhattanDistance
+from game import Directions, Actions
 import random, util
-
+import numpy as np
 from game import Agent
+
+BOARD_DATA = None
+def set_board_data(board):
+    global BOARD_DATA
+    BOARD_DATA=board
+
+def moveToPos(pos,move):
+    x,y = pos
+    match move:
+        case 'North': return (x,y+1)
+        case 'South': return (x,y-1)
+        case 'East': return (x+1,y)
+        case 'West': return (x-1,y)
+        case 'Stop': return (x,y)
+        case _: raise ValueError(f"Unrecognized move: '{move}'")
+def posToMove(pos, move):
+    x, y = pos
+    if move == (x,y): return 'Stop'
+    elif move == (x, y + 1): return 'North'
+    elif move == (x, y - 1): return 'South'
+    elif move == (x + 1, y): return 'East'
+    elif move == (x - 1, y): return 'West'
+    else: raise ValueError(f"Unrecognized new position: '{move}'")
+
+
+def get_neighbors(pos, gameState):
+    x, y = pos
+    neighbors = []
+
+    for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+        new_pos = (x + dx, y + dy)
+        if not gameState.hasWall(new_pos[0], new_pos[1]): neighbors.append(new_pos)
+
+    return neighbors
+
 
 class MultiAgentSearchAgent(Agent):
     """
@@ -153,7 +188,6 @@ class NaiveAgent(Agent):
 
         """ Manhattan distance to the available foods from the successor state """
         foodList = newFood.asList()
-        from util import manhattanDistance
         foodDistance = [0]
         for pos in foodList: foodDistance.append( manhattanDistance(newPos,pos) )
             
@@ -215,5 +249,62 @@ class AStarAgent(Agent):
     Uses A* to find the next action
     """
 
+    def get_min_score_node(self,visited,f_score):
+        min_score = float('inf')
+        min_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score < min_score:
+                min_score = score
+                min_score_node = pos
+        return min_score_node
+
+    def reconstruct_path(self,came_from,current):
+        path = []
+        while current in came_from:
+            current=came_from[current]
+            path.insert(0,current)
+        return path
+
+    def AStar(self,pos,goal,state):
+        "Returns the first state towards the closest food"
+        assert BOARD_DATA is not None
+        #nodes visited
+        visited=Queue()
+        visited.push(pos)
+        #preceding node
+        came_from = {}
+        #cost from start to n
+        g_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        g_score[pos]=0
+        #cost from start to goal
+        f_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        f_score[pos]=manhattanDistance(pos,goal)
+        while not visited.isEmpty():
+            #lowest cost node
+            current = self.get_min_score_node(visited,f_score)
+            if current == goal: 
+                path = self.reconstruct_path(came_from,current)
+                if len(path)==1: return posToMove(pos,path[0])
+                return posToMove(pos,path[1])
+            visited.pop(current)
+
+            for neighbor in get_neighbors(current, state):
+                tentative = g_score[current] + 1
+                if tentative < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative
+                    f_score[neighbor] = tentative + manhattanDistance(neighbor, goal)
+                    if not visited.contains(neighbor): visited.push(neighbor)
+
+        raise StopIteration("A* did not reach the goal state")
+
     def getAction(self, state):
-        return super().getAction(state)
+        pacman = state.getPacmanPosition()
+        newFood = state.getFood()
+        foodList = newFood.asList()
+
+        foodDistance = [0]
+        for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
+        closest = foodList[foodDistance.index(min(foodDistance))]
+        return self.AStar(pacman,closest,state)
