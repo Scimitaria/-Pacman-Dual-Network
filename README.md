@@ -2,7 +2,7 @@
 Artificial Intelligence project designed by UC Berkeley to develop game agents for Pacman using search algorithms and reinforcement learning
 
 Run with
-```python pacman.py```
+```python pacman.py --textGraphics```
 
 ## Files:
 pacman.py, game.py: implementations for Pacman framework.  

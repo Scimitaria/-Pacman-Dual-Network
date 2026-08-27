@@ -42,6 +42,12 @@ def posToMove(pos, move):
     elif move == (x - 1, y): return 'West'
     else: raise ValueError(f"Unrecognized new position: '{move}'")
 
+def firstMinIndex(lst):
+    return lst.index(min(lst))
+def randomMinIndex(lst):
+    minVal = min(lst)
+    minIndices = [index for index, value in enumerate(lst) if value == minVal]
+    return random.choice(minIndices)
 
 def get_neighbors(pos, gameState):
     x, y = pos
@@ -259,8 +265,8 @@ class AStarAgent(Agent):
                 min_score_node = pos
         return min_score_node
 
-    def reconstruct_path(self,came_from,current,goal):
-        path = [goal]
+    def reconstruct_path(self,came_from,current):
+        path = [current]
         while current in came_from:
             current=came_from[current]
             path.insert(0,current)
@@ -284,7 +290,7 @@ class AStarAgent(Agent):
             #lowest cost node
             current = self.get_min_score_node(visited,f_score)
             if current == goal: 
-                path = self.reconstruct_path(came_from,current,goal)
+                path = self.reconstruct_path(came_from,current)
                 if len(path)==1: return posToMove(pos,path[1])
                 return posToMove(pos,path[1])
             visited.pop(current)
@@ -306,5 +312,6 @@ class AStarAgent(Agent):
 
         foodDistance = []
         for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
-        closest = foodList[foodDistance.index(min(foodDistance))]
+        #randomMinIndex provides higher variability, but firstMinIndex performs better
+        closest = foodList[randomMinIndex(foodDistance)]
         return self.AStar(pacman,closest,state)
