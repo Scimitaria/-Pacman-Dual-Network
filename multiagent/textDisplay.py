@@ -13,7 +13,7 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-import time
+import time, sys
 try: 
     import pacman
 except:
@@ -23,6 +23,7 @@ DRAW_EVERY = 1
 SLEEP_TIME = 0 # This can be overwritten by __init__
 DISPLAY_MOVES = False
 QUIET = False # Supresses output
+previous_lines = 0
 
 class NullGraphics:
     def initialize(self, state, isBlue = False):
@@ -75,8 +76,26 @@ class PacmanGraphics:
     def pause(self):
         time.sleep(SLEEP_TIME)
 
-    def draw(self, state):
-        print(state)
+    def draw(self,state):
+        global previous_lines
+        out = str(state)
+
+        if previous_lines:
+            # Move to the beginning of the first line of the old state
+            sys.stdout.write(f"\033[{previous_lines}A")
+
+            # Clear each old line
+            for _ in range(previous_lines):
+                sys.stdout.write("\033[2K")
+                sys.stdout.write("\033[1B")
+
+            # Return to the beginning of the first line
+            sys.stdout.write(f"\033[{previous_lines}A")
+
+        sys.stdout.write(out)
+        sys.stdout.flush()
+
+        previous_lines = out.count("\n")
 
     def finish(self):
         pass
