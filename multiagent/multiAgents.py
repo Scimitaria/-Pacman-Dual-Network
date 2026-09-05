@@ -14,10 +14,17 @@
 
 
 from util import Queue, manhattanDistance
-from game import Directions, Actions
+from game import Directions, Agent
+from enum import Enum
 import random, util
 import numpy as np
-from game import Agent
+
+class Action(Enum):
+    North = 0
+    South = 1
+    East  = 2
+    West  = 3
+    Stop  = 4
 
 BOARD_DATA = None
 def set_board_data(board):
@@ -33,7 +40,7 @@ def moveToPos(pos,move):
         case 'West': return (x-1,y)
         case 'Stop': return (x,y)
         case _: raise ValueError(f"Unrecognized move: '{move}'")
-def posToMove(pos, move):
+def posToMove(pos,move):
     x, y = pos
     if move == (x,y): return 'Stop'
     elif move == (x, y + 1): return 'North'
@@ -41,6 +48,26 @@ def posToMove(pos, move):
     elif move == (x + 1, y): return 'East'
     elif move == (x - 1, y): return 'West'
     else: raise ValueError(f"Unrecognized new position: '{move}'")
+
+def getClosestFood(state):
+    pacman = state.getPacmanPosition()
+    newFood = state.getFood()
+    foodList = newFood.asList()
+
+    foodDistance = []
+    for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
+    #randomMinIndex provides higher variability, but firstMinIndex performs better
+    return foodList[randomMinIndex(foodDistance)]
+
+def getPosFromIndex(index):
+    assert BOARD_DATA is not None
+    x = index / BOARD_DATA.height
+    y = index % BOARD_DATA.height
+    return x,y
+def getIndexFromPos(pos):
+    assert BOARD_DATA is not None
+    (x,y) = pos
+    return x * BOARD_DATA.height + y
 
 def firstMinIndex(lst):
     return lst.index(min(lst))
@@ -307,11 +334,72 @@ class AStarAgent(Agent):
 
     def getAction(self, state):
         pacman = state.getPacmanPosition()
-        newFood = state.getFood()
-        foodList = newFood.asList()
-
-        foodDistance = []
-        for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
-        #randomMinIndex provides higher variability, but firstMinIndex performs better
-        closest = foodList[randomMinIndex(foodDistance)]
+        closest = getClosestFood(state)
         return self.AStar(pacman,closest,state)
+
+class QLearningAgent(Agent):
+    """
+    Uses a Q-learning algorithm to select the next action
+
+    Reference: https://www.geeksforgeeks.org/machine-learning/q-learning-in-python/
+    """
+    def __init__(self):
+        self.alpha   = 0.8 # learning rate    - determines impact of new information
+        self.gamma   = 0.9 # discount         - balances immediate and future rewards
+        self.epsilon = 0.2 # exploration prob - decides whether a random action is chosen
+        self.epochs  = 100
+
+        self.actions = ['North','South','East','West','Stop']
+        # North, South, East, West, Stop
+        self.n_actions = 5
+        self.q_table = None
+        self.goal = None
+
+    #TODO: def show_Q_table(self):
+
+    def getBestLegalAction(self, state):
+        index = getIndexFromPos(state.getPacmanPosition())
+        legal = state.getLegalActions()
+
+        legal_indices = [self.actions.index(a) for a in legal]
+
+        return max(legal_indices,key=lambda i: self.q_table[index][i]) # type: ignore
+
+    def update_Q_table(self,state):
+        assert self.goal is not None
+        assert self.q_table is not None
+
+        current_state  = state
+        current_index  = getIndexFromPos(state.getPacmanPosition())
+
+        while True: #iteration is faster and less memory intensive
+            legalActions = current_state.getLegalActions()
+            if not legalActions: break
+            legal_indices = [self.actions.index(a) for a in legalActions]
+            if np.random.rand() < self.epsilon: action = random.choice(legal_indices)
+            else: action = self.getBestLegalAction(current_state)
+
+            new_state = current_state.generatePacmanSuccessor(self.actions[action])  
+            new_pacman = new_state.getPacmanPosition()
+            new_index = getIndexFromPos(new_pacman)
+
+            reward = 1 if new_pacman == self.goal else -1 if new_pacman in new_state.getGhostPositions() else 0
+            current_q = self.q_table[current_index][action]
+
+            self.q_table[current_index][action] = current_q + self.alpha * (reward + self.gamma * self.getBestLegalAction(new_state) - current_q)
+
+            #print(self.actions[action])
+            #print(new_pacman,self.goal)
+            if new_pacman == self.goal: break
+            current_state = new_state
+            current_index = new_index
+
+    def getAction(self,state):
+        # Total number of states on the board
+        n_states = BOARD_DATA.width * BOARD_DATA.height # type: ignore
+        self.q_table = np.zeros((n_states,self.n_actions))
+        self.goal = getClosestFood(state)
+
+        for _ in range(self.epochs): self.update_Q_table(state)
+        actionIndex = self.getBestLegalAction(state)
+        return self.actions[actionIndex]
