@@ -345,25 +345,33 @@ class QLearningAgent(Agent):
     """
     def __init__(self):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
-        self.gamma   = 0.9 # discount         - balances immediate and future rewards
+        self.gamma   = 0.5 # discount         - balances immediate and future rewards
         self.epsilon = 0.2 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 100
+        self.epochs  = 1000
+        self.gameDepth = 100
 
         self.actions = ['North','South','East','West','Stop']
         # North, South, East, West, Stop
         self.n_actions = 5
+        self.n_states = None
         self.q_table = None
         self.goal = None
+
+        self.isTraining = True
 
     #TODO: def show_Q_table(self):
 
     def getBestLegalAction(self, state):
         index = getIndexFromPos(state.getPacmanPosition())
         legal = state.getLegalActions()
-
         legal_indices = [self.actions.index(a) for a in legal]
 
         return max(legal_indices,key=lambda i: self.q_table[index][i]) # type: ignore
+
+    def getBestQValue(self, state):
+        index = getIndexFromPos(state.getPacmanPosition())
+
+        return max(self.q_table[index][i] for i in [0,1,2,3,4]) # type: ignore
 
     def update_Q_table(self,state):
         assert self.goal is not None
@@ -372,7 +380,7 @@ class QLearningAgent(Agent):
         current_state  = state
         current_index  = getIndexFromPos(state.getPacmanPosition())
 
-        while True: #iteration is faster and less memory intensive
+        for i in range(self.gameDepth): #iteration is faster and less memory intensive
             legalActions = current_state.getLegalActions()
             if not legalActions: break
             legal_indices = [self.actions.index(a) for a in legalActions]
@@ -383,23 +391,24 @@ class QLearningAgent(Agent):
             new_pacman = new_state.getPacmanPosition()
             new_index = getIndexFromPos(new_pacman)
 
-            reward = 1 if new_pacman == self.goal else -1 if new_pacman in new_state.getGhostPositions() else 0
+            #else -1 if new_pacman in new_state.getGhostPositions()
+            reward = 100 if new_pacman == self.goal else -1#(1/util.manhattanDistance(new_pacman,self.goal))
             current_q = self.q_table[current_index][action]
 
-            self.q_table[current_index][action] = current_q + self.alpha * (reward + self.gamma * self.getBestLegalAction(new_state) - current_q)
-
-            #print(self.actions[action])
-            #print(new_pacman,self.goal)
+            self.q_table[current_index][action] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_state) - current_q)
+            
             if new_pacman == self.goal: break
             current_state = new_state
             current_index = new_index
 
     def getAction(self,state):
         # Total number of states on the board
-        n_states = BOARD_DATA.width * BOARD_DATA.height # type: ignore
-        self.q_table = np.zeros((n_states,self.n_actions))
-        self.goal = getClosestFood(state)
+        self.n_states = BOARD_DATA.width * BOARD_DATA.height # type: ignore
+        self.q_table = np.zeros((self.n_states,self.n_actions))
+        self.goal = (1,1)#getClosestFood(state)
 
-        for _ in range(self.epochs): self.update_Q_table(state)
+        if self.isTraining:
+            for _ in range(self.epochs): self.update_Q_table(state)
+            self.isTraining = False
         actionIndex = self.getBestLegalAction(state)
         return self.actions[actionIndex]

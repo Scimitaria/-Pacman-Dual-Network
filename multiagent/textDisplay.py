@@ -23,6 +23,7 @@ DRAW_EVERY = 1
 SLEEP_TIME = 0 # This can be overwritten by __init__
 DISPLAY_MOVES = False
 QUIET = False # Supresses output
+
 previous_lines = 0
 
 class NullGraphics:
@@ -76,7 +77,7 @@ class PacmanGraphics:
     def pause(self):
         time.sleep(SLEEP_TIME)
 
-    def draw(self,state):
+    def draw_buffered(self,state):
         global previous_lines
         out = str(state)
 
@@ -96,6 +97,8 @@ class PacmanGraphics:
         sys.stdout.flush()
 
         previous_lines = out.count("\n")
+    def draw(self,state):
+        print(str(state))
 
     def finish(self):
         pass
