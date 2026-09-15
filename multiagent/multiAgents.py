@@ -58,6 +58,12 @@ def getClosestFood(state):
     for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
     #randomMinIndex provides higher variability, but firstMinIndex performs better
     return foodList[randomMinIndex(foodDistance)]
+def getClosestGhost(state):
+    pacman = state.getPacmanPosition()
+    ghosts = state.getGhostPositions()
+    ghostDistance = []
+    for pos in ghosts: ghostDistance.append(manhattanDistance(pacman,pos))
+    return ghosts[randomMinIndex(ghostDistance)]
 
 def getPosFromIndex(index):
     assert BOARD_DATA is not None
@@ -347,68 +353,69 @@ class QLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.5 # discount         - balances immediate and future rewards
         self.epsilon = 0.2 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 1000
-        self.gameDepth = 100
+        self.epochs  = 10000
+        self.gameDepth = 1000
 
         self.actions = ['North','South','East','West','Stop']
         # North, South, East, West, Stop
-        self.n_actions = 5
-        self.n_states = None
-        self.q_table = None
+        self.q_table = {}
         self.goal = None
 
         self.isTraining = True
 
     #TODO: def show_Q_table(self):
 
-    def getBestLegalAction(self, state):
-        index = getIndexFromPos(state.getPacmanPosition())
-        legal = state.getLegalActions()
-        legal_indices = [self.actions.index(a) for a in legal]
+    def assembleTableState(self,state):
+        closestFood = getClosestFood(state)
+        closestGhost = getClosestGhost(state)
+        return (closestFood,closestGhost)
 
-        return max(legal_indices,key=lambda i: self.q_table[index][i]) # type: ignore
+    def getBestLegalAction(self, state, legalActions):
+        try:
+            state_qs = self.q_table[state]
+            legal_qs = {action: state_qs[action] for action in legalActions}
+            return max(legal_qs,key=legal_qs.get) # type: ignore
+        except:
+            return random.choice(legalActions)
 
     def getBestQValue(self, state):
-        index = getIndexFromPos(state.getPacmanPosition())
-
-        return max(self.q_table[index][i] for i in [0,1,2,3,4]) # type: ignore
+        try: return max(self.q_table[state].values())
+        except: return 0
 
     def update_Q_table(self,state):
         assert self.goal is not None
         assert self.q_table is not None
 
         current_state  = state
-        current_index  = getIndexFromPos(state.getPacmanPosition())
+        current_qState = self.assembleTableState(state)
 
         for i in range(self.gameDepth): #iteration is faster and less memory intensive
             legalActions = current_state.getLegalActions()
             if not legalActions: break
-            legal_indices = [self.actions.index(a) for a in legalActions]
-            if np.random.rand() < self.epsilon: action = random.choice(legal_indices)
-            else: action = self.getBestLegalAction(current_state)
+            if np.random.rand() < self.epsilon: action = random.choice(legalActions)
+            else: action = self.getBestLegalAction(current_qState,legalActions)
 
-            new_state = current_state.generatePacmanSuccessor(self.actions[action])  
+            new_state = current_state.generatePacmanSuccessor(action)
             new_pacman = new_state.getPacmanPosition()
-            new_index = getIndexFromPos(new_pacman)
+            new_qState = self.assembleTableState(new_state)
 
-            #else -1 if new_pacman in new_state.getGhostPositions()
-            reward = 100 if new_pacman == self.goal else -1#(1/util.manhattanDistance(new_pacman,self.goal))
-            current_q = self.q_table[current_index][action]
+            reward = new_state.data.score
+            try: current_q = self.q_table[current_qState][action]
+            except: current_q = 0
 
-            self.q_table[current_index][action] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_state) - current_q)
+            try: self.q_table[current_qState][action] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
+            except:
+                self.q_table[current_qState] = {}
+                self.q_table[current_qState][action] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
             
             if new_pacman == self.goal: break
             current_state = new_state
-            current_index = new_index
+            current_qState = new_qState
 
     def getAction(self,state):
-        # Total number of states on the board
-        self.n_states = BOARD_DATA.width * BOARD_DATA.height # type: ignore
-        self.q_table = np.zeros((self.n_states,self.n_actions))
-        self.goal = (1,1)#getClosestFood(state)
+        self.goal = getClosestFood(state)
 
         if self.isTraining:
             for _ in range(self.epochs): self.update_Q_table(state)
             self.isTraining = False
-        actionIndex = self.getBestLegalAction(state)
-        return self.actions[actionIndex]
+        return self.getBestLegalAction(self.assembleTableState(state),state.getLegalActions())
