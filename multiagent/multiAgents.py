@@ -414,7 +414,7 @@ class QLearningAgent(Agent):
 
     def getAction(self,state):
         self.goal = getClosestFood(state)
-
+        print(self.q_table[self.assembleTableState(state)])
         if self.isTraining:
             for _ in range(self.epochs): self.update_Q_table(state)
             self.isTraining = False
