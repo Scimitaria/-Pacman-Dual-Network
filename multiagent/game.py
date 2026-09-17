@@ -204,6 +204,9 @@ class Grid:
                 base *= 2
         return hash(h)
 
+    def isEmpty(self):
+        return not any([any(l) for l in self.data])
+
     def copy(self):
         g = Grid(self.width, self.height)
         g.data = [x[:] for x in self.data]

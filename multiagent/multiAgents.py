@@ -13,7 +13,7 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-from util import Queue, manhattanDistance
+from util import Queue, manhattanDistance, tPrint
 from game import Directions, Agent
 from enum import Enum
 import random, util
@@ -353,13 +353,11 @@ class QLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.5 # discount         - balances immediate and future rewards
         self.epsilon = 0.2 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 10000
-        self.gameDepth = 1000
+        self.epochs  = 100
+        self.gameDepth = 100
 
         self.actions = ['North','South','East','West','Stop']
-        # North, South, East, West, Stop
         self.q_table = {}
-        self.goal = None
 
         self.isTraining = True
 
@@ -383,7 +381,6 @@ class QLearningAgent(Agent):
         except: return 0
 
     def update_Q_table(self,state):
-        assert self.goal is not None
         assert self.q_table is not None
 
         current_state  = state
@@ -396,7 +393,7 @@ class QLearningAgent(Agent):
             else: action = self.getBestLegalAction(current_qState,legalActions)
 
             new_state = current_state.generatePacmanSuccessor(action)
-            new_pacman = new_state.getPacmanPosition()
+            if new_state.getFood().isEmpty(): break
             new_qState = self.assembleTableState(new_state)
 
             reward = new_state.data.score
@@ -407,15 +404,14 @@ class QLearningAgent(Agent):
             except:
                 self.q_table[current_qState] = {}
                 self.q_table[current_qState][action] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
-            
-            if new_pacman == self.goal: break
+
             current_state = new_state
             current_qState = new_qState
 
     def getAction(self,state):
-        self.goal = getClosestFood(state)
-
         if self.isTraining:
-            for _ in range(self.epochs): self.update_Q_table(state)
+            for epoch in range(self.epochs):
+                tPrint(f"Epochs: {epoch}") 
+                self.update_Q_table(state)
             self.isTraining = False
         return self.getBestLegalAction(self.assembleTableState(state),state.getLegalActions())
