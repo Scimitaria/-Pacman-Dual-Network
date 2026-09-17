@@ -491,6 +491,8 @@ def readCommand( argv ):
     parser.add_option('-p', '--pacman', dest='pacman',
                       help=default('the agent TYPE in the pacmanAgents module to use'),
                       metavar='TYPE', default='QLearningAgent')
+    parser.add_option('--doNotFlushOutput',action='store_true', dest='flushOutput',
+                      help='remove output flushing for easier debug printing', default=False)
     parser.add_option('-t', '--textGraphics', action='store_true', dest='textGraphics',
                       help='Display output as text only', default=False)
     parser.add_option('-q', '--quietTextGraphics', action='store_true', dest='quietGraphics',
@@ -557,7 +559,7 @@ def readCommand( argv ):
     elif options.textGraphics:
         import textDisplay
         textDisplay.SLEEP_TIME = options.frameTime
-        args['display'] = textDisplay.PacmanGraphics()
+        args['display'] = textDisplay.PacmanGraphics(flush=(not options.flushOutput))
     else:
         import graphicsDisplay
         args['display'] = graphicsDisplay.PacmanGraphics(options.zoom, frameTime = options.frameTime)

@@ -154,7 +154,7 @@ class InfoPane:
 
 
 class PacmanGraphics:
-    def __init__(self, zoom=1.0, frameTime=0.0, capture=False):
+    def __init__(self, zoom=1.0, frameTime=0.0, capture=False, flush=False):
         self.have_window = 0
         self.currentGhostImages = {}
         self.pacmanImage = None

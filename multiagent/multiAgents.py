@@ -353,7 +353,7 @@ class QLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.5 # discount         - balances immediate and future rewards
         self.epsilon = 0.2 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 100
+        self.epochs  = 1000
         self.gameDepth = 100
 
         self.actions = ['North','South','East','West','Stop']

@@ -49,7 +49,8 @@ class NullGraphics:
         pass
 
 class PacmanGraphics:
-    def __init__(self, speed=None):
+    def __init__(self, speed=None, flush=True):
+        self.flush = flush
         if speed != None:
             global SLEEP_TIME
             SLEEP_TIME = speed
@@ -77,6 +78,8 @@ class PacmanGraphics:
     def pause(self):
         time.sleep(SLEEP_TIME)
 
+    def draw(self,state):
+        self.draw_buffered(state) if self.flush else self.draw_unbuffered(state)
     def draw_buffered(self,state):
         global previous_lines
         out = str(state)
@@ -97,7 +100,7 @@ class PacmanGraphics:
         sys.stdout.flush()
 
         previous_lines = out.count("\n")
-    def draw(self,state):
+    def draw_unbuffered(self,state):
         print(str(state))
 
     def finish(self):
