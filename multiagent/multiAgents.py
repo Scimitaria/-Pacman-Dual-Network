@@ -16,7 +16,7 @@
 from util import Queue, manhattanDistance, tPrint
 from game import Directions, Agent
 from enum import Enum
-import random, util
+import random, util, json
 import numpy as np
 
 class Action(Enum):
@@ -351,22 +351,24 @@ class QLearningAgent(Agent):
     """
     def __init__(self):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
-        self.gamma   = 0.5 # discount         - balances immediate and future rewards
-        self.epsilon = 0.2 # exploration prob - decides whether a random action is chosen
+        self.gamma   = 0.3 # discount         - balances immediate and future rewards
+        self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
         self.epochs  = 1000
         self.gameDepth = 100
 
         self.actions = ['North','South','East','West','Stop']
-        self.q_table = {}
+        with open('q.json','r') as q: data = json.load(q)
+        self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
 
         self.isTraining = True
 
     #TODO: def show_Q_table(self):
 
     def assembleTableState(self,state):
-        closestFood = getClosestFood(state)
-        closestGhost = getClosestGhost(state)
-        return (closestFood,closestGhost)
+        (px,py) = state.getPacmanPosition()
+        (fx,fy) = getClosestFood(state)
+        (gx,gy) = getClosestGhost(state)
+        return ((px,py),(fx-px,fy-py),(gx-px,gy-py))
 
     def getBestLegalAction(self, state, legalActions):
         try:
@@ -386,7 +388,7 @@ class QLearningAgent(Agent):
         current_state  = state
         current_qState = self.assembleTableState(state)
 
-        for i in range(self.gameDepth): #iteration is faster and less memory intensive
+        for _ in range(self.gameDepth): #iteration is faster and less memory intensive
             legalActions = current_state.getLegalActions()
             if not legalActions: break
             if np.random.rand() < self.epsilon: action = random.choice(legalActions)
@@ -396,7 +398,7 @@ class QLearningAgent(Agent):
             if new_state.getFood().isEmpty(): break
             new_qState = self.assembleTableState(new_state)
 
-            reward = new_state.data.score
+            reward = betterEvaluationFunction(new_state)
             try: current_q = self.q_table[current_qState][action]
             except: current_q = 0
 
@@ -413,5 +415,10 @@ class QLearningAgent(Agent):
             for epoch in range(self.epochs):
                 tPrint(f"Epochs: {epoch}") 
                 self.update_Q_table(state)
+                with open('q.json','w') as file:
+                    file.seek(0)
+                    file.truncate()
+                    q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
+                    json.dump(q_table_json, file, indent=4)
             self.isTraining = False
         return self.getBestLegalAction(self.assembleTableState(state),state.getLegalActions())
