@@ -13,11 +13,11 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-from util import Queue, manhattanDistance, tPrint
+from util import Queue, manhattanDistance, tPrint, lookup
 from game import Directions, Agent
 from enum import Enum
-import random, util, json
-import numpy as np
+import random, json
+import numpy as np # type: ignore
 
 class Action(Enum):
     North = 0
@@ -110,7 +110,7 @@ class MultiAgentSearchAgent(Agent):
 
     def __init__(self, evalFn = 'scoreEvaluationFunction', depth = '2'):
         self.index = 0 # Pacman is always agent index 0
-        self.evaluationFunction = util.lookup(evalFn, globals())
+        self.evaluationFunction = lookup(evalFn, globals())
         self.depth = int(depth)
 
 def scoreEvaluationFunction(currentGameState):
@@ -283,7 +283,7 @@ class NaiveAgent(Agent):
         chosenIndex = random.choice(bestIndices) # Pick randomly among the best
         return legalMoves[chosenIndex]
 
-class AStarAgent(Agent):
+class naiveAStarAgent(Agent):
     """
     Uses A* to find the next action
     """
@@ -340,10 +340,98 @@ class AStarAgent(Agent):
 
     def getAction(self, state):
         pacman = state.getPacmanPosition()
-        closest = getClosestFood(state)
-        return self.AStar(pacman,closest,state)
+        closestFood = getClosestFood(state)
+        return self.AStar(pacman,closestFood,state)
 
-class QLearningAgent(Agent):
+class AStarAgent(Agent):
+    """
+    Uses A* to find the next action
+    Closest food if safe, flees if in danger
+    """
+
+    def get_min_score_node(self,visited,f_score):
+        min_score = float('inf')
+        min_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score < min_score:
+                min_score = score
+                min_score_node = pos
+        return min_score_node
+    def get_max_score_node(self,visited,f_score):
+        max_score = float('-inf')
+        max_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score > max_score:
+                max_score = score
+                max_score_node = pos
+        return max_score_node
+
+    def reconstruct_path(self,came_from,current):
+        path = [current]
+        while current in came_from:
+            current=came_from[current]
+            path.insert(0,current)
+        return path
+
+    def AStar(self,pos,goal,state):
+        "Returns the first state towards the closest food"
+        assert BOARD_DATA is not None
+        #nodes visited
+        visited=Queue()
+        visited.push(pos)
+        #preceding node
+        came_from = {}
+        #cost from start to n
+        g_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        g_score[pos]=0
+        #cost from start to goal
+        f_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        f_score[pos]=manhattanDistance(pos,goal)
+        while not visited.isEmpty():
+            #lowest cost node
+            current = self.get_min_score_node(visited,f_score)
+            if current == goal: 
+                path = self.reconstruct_path(came_from,current)
+                if len(path)==1: return posToMove(pos,path[1])
+                return posToMove(pos,path[1])
+            visited.pop(current)
+
+            neighbors = get_neighbors(current, state)
+            for neighbor in neighbors:
+                tentative = g_score[current] + 1
+                if tentative < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative
+                    f_score[neighbor] = tentative + manhattanDistance(neighbor, goal)
+                    if not visited.contains(neighbor): visited.push(neighbor)
+        raise StopIteration("A* did not reach the goal state")
+
+    def flee(self,pos,ghost,state):
+        "Runs away as efficiently as possible"
+        assert BOARD_DATA is not None
+        neighbors = get_neighbors(pos, state)
+        maxDist = 0
+        maxPos = None
+        for neighbor in neighbors:
+            dist = manhattanDistance(neighbor,ghost)
+            if dist > maxDist:
+                maxDist = dist
+                maxPos = neighbor
+        return posToMove(pos,maxPos)
+
+    def getAction(self, state):
+        pacman = state.getPacmanPosition()
+        closestFood = getClosestFood(state)
+        closestGhost = getClosestGhost(state)
+        if manhattanDistance(pacman,closestFood)+2 > manhattanDistance(pacman,closestGhost):
+        #if manhattanDistance(pacman,closestGhost) < 3:
+            return self.flee(pacman,closestGhost,state)
+        return self.AStar(pacman,closestFood,state)
+        
+
+class naiveQLearningAgent(Agent):
     """
     Uses a Q-learning algorithm to select the next action
 

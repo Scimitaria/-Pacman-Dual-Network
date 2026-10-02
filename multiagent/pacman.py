@@ -42,7 +42,7 @@ The keys are 'a', 's', 'd', and 'w' to move (or arrow keys).  Have fun!
 """
 from game import GameStateData,Game,Directions,Actions
 from util import nearestPoint,manhattanDistance
-import util, layout, sys, types, time, random, os
+import layout, sys, random, os
 from multiAgents import set_board_data
 
 ###################################################
@@ -209,6 +209,9 @@ class GameState:
     def isWin( self ):
         return self.data._win
 
+    def isJunction(self):
+        #more than two directions and stop
+        return len(self.getLegalPacmanActions()) > 3
     #############################################
     #             Helper methods:               #
     # You shouldn't need to call these directly #
@@ -490,7 +493,7 @@ def readCommand( argv ):
                       metavar='LAYOUT_FILE', default='mediumClassic')
     parser.add_option('-p', '--pacman', dest='pacman',
                       help=default('the agent TYPE in the pacmanAgents module to use'),
-                      metavar='TYPE', default='QLearningAgent')
+                      metavar='TYPE', default='AStarAgent')
     parser.add_option('--doNotFlushOutput',action='store_true', dest='flushOutput',
                       help='remove output flushing for easier debug printing', default=False)
     parser.add_option('-t', '--textGraphics', action='store_true', dest='textGraphics',
