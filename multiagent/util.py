@@ -13,10 +13,8 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-import sys
-import inspect
-import heapq, random
-
+import sys, inspect, heapq, random
+import numpy as np # type: ignore
 
 class FixedRandom:
     def __init__(self):
@@ -212,10 +210,85 @@ class PriorityQueueWithFunction(PriorityQueue):
         "Adds an item to the queue with priority from the priority function"
         PriorityQueue.push(self, item, self.priorityFunction(item))
 
+def moveToPos(pos,move):
+    x,y = pos
+    match move:
+        case 'North': return (x,y+1)
+        case 'South': return (x,y-1)
+        case 'East': return (x+1,y)
+        case 'West': return (x-1,y)
+        case 'Stop': return (x,y)
+        case _: raise ValueError(f"Unrecognized move: '{move}'")
+def posToMove(pos,move):
+    x, y = pos
+    if move == (x,y): return 'Stop'
+    elif move == (x, y + 1): return 'North'
+    elif move == (x, y - 1): return 'South'
+    elif move == (x + 1, y): return 'East'
+    elif move == (x - 1, y): return 'West'
+    else: raise ValueError(f"Unrecognized new position: '{move}'")
+
+def get_neighbors(pos, gameState):
+    x, y = pos
+    neighbors = []
+
+    for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+        new_pos = (x + dx, y + dy)
+        if not gameState.hasWall(new_pos[0], new_pos[1]): neighbors.append(new_pos)
+
+    return neighbors
+
 
 def manhattanDistance( xy1, xy2 ):
     "Returns the Manhattan distance between points xy1 and xy2"
     return abs( xy1[0] - xy2[0] ) + abs( xy1[1] - xy2[1] )
+
+def _get_min_score_node(visited,f_score):
+    min_score = float('inf')
+    min_score_node = None
+    for pos in visited.list:
+        score = f_score[pos]
+        if score < min_score:
+            min_score = score
+            min_score_node = pos
+    return min_score_node
+def _reconstruct_path(came_from,current):
+    path = [current]
+    while current in came_from:
+        current=came_from[current]
+        path.insert(0,current)
+    return path
+def aStarDistance(xy1,xy2,state,BOARD_DATA):
+    "Returns in-game distance between xy1 and xy2"
+    #nodes visited
+    visited=Queue()
+    visited.push(xy1)
+    #preceding node
+    came_from = {}
+    #cost from start to n
+    g_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+    g_score[xy1]=0
+    #cost from start to goal
+    f_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+    f_score[xy1]=manhattanDistance(xy1,xy2)
+    while not visited.isEmpty():
+        #lowest cost node
+        current = _get_min_score_node(visited,f_score)
+        if current == xy2: 
+            path = _reconstruct_path(came_from,current)
+            return len(path)
+        visited.pop(current)
+
+        neighbors = get_neighbors(current, state)
+        for neighbor in neighbors:
+            tentative = g_score[current] + 1
+            if tentative < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative
+                f_score[neighbor] = tentative + manhattanDistance(neighbor, xy2)
+                if not visited.contains(neighbor):
+                    visited.push(neighbor)
+    raise StopIteration("A* did not reach the goal state")
 
 """
   Data structures and functions useful for various course projects

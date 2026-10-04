@@ -13,7 +13,7 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 
 
-from util import Queue, manhattanDistance, tPrint, lookup
+from util import Queue, manhattanDistance, aStarDistance, tPrint, lookup, posToMove, get_neighbors
 from game import Directions, Agent
 from enum import Enum
 import random, json
@@ -31,38 +31,20 @@ def set_board_data(board):
     global BOARD_DATA
     BOARD_DATA=board
 
-def moveToPos(pos,move):
-    x,y = pos
-    match move:
-        case 'North': return (x,y+1)
-        case 'South': return (x,y-1)
-        case 'East': return (x+1,y)
-        case 'West': return (x-1,y)
-        case 'Stop': return (x,y)
-        case _: raise ValueError(f"Unrecognized move: '{move}'")
-def posToMove(pos,move):
-    x, y = pos
-    if move == (x,y): return 'Stop'
-    elif move == (x, y + 1): return 'North'
-    elif move == (x, y - 1): return 'South'
-    elif move == (x + 1, y): return 'East'
-    elif move == (x - 1, y): return 'West'
-    else: raise ValueError(f"Unrecognized new position: '{move}'")
-
 def getClosestFood(state):
     pacman = state.getPacmanPosition()
     newFood = state.getFood()
     foodList = newFood.asList()
 
     foodDistance = []
-    for pos in foodList: foodDistance.append(manhattanDistance(pacman,pos))
+    for pos in foodList: foodDistance.append(aStarDistance(pacman,pos,state,BOARD_DATA))
     #randomMinIndex provides higher variability, but firstMinIndex performs better
     return foodList[randomMinIndex(foodDistance)]
 def getClosestGhost(state):
     pacman = state.getPacmanPosition()
     ghosts = state.getGhostPositions()
     ghostDistance = []
-    for pos in ghosts: ghostDistance.append(manhattanDistance(pacman,pos))
+    for pos in ghosts: ghostDistance.append(aStarDistance(pacman,tuple(map(round,pos)),state,BOARD_DATA))
     return ghosts[randomMinIndex(ghostDistance)]
 
 def getPosFromIndex(index):
@@ -81,17 +63,6 @@ def randomMinIndex(lst):
     minVal = min(lst)
     minIndices = [index for index, value in enumerate(lst) if value == minVal]
     return random.choice(minIndices)
-
-def get_neighbors(pos, gameState):
-    x, y = pos
-    neighbors = []
-
-    for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-        new_pos = (x + dx, y + dy)
-        if not gameState.hasWall(new_pos[0], new_pos[1]): neighbors.append(new_pos)
-
-    return neighbors
-
 
 class MultiAgentSearchAgent(Agent):
     """
@@ -324,7 +295,6 @@ class naiveAStarAgent(Agent):
             current = self.get_min_score_node(visited,f_score)
             if current == goal: 
                 path = self.reconstruct_path(came_from,current)
-                if len(path)==1: return posToMove(pos,path[1])
                 return posToMove(pos,path[1])
             visited.pop(current)
 
@@ -388,13 +358,12 @@ class AStarAgent(Agent):
         g_score[pos]=0
         #cost from start to goal
         f_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
-        f_score[pos]=manhattanDistance(pos,goal)
+        f_score[pos]=aStarDistance(pos,goal,state,BOARD_DATA)
         while not visited.isEmpty():
             #lowest cost node
             current = self.get_min_score_node(visited,f_score)
             if current == goal: 
                 path = self.reconstruct_path(came_from,current)
-                if len(path)==1: return posToMove(pos,path[1])
                 return posToMove(pos,path[1])
             visited.pop(current)
 
@@ -404,8 +373,9 @@ class AStarAgent(Agent):
                 if tentative < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative
-                    f_score[neighbor] = tentative + manhattanDistance(neighbor, goal)
-                    if not visited.contains(neighbor): visited.push(neighbor)
+                    f_score[neighbor] = tentative + aStarDistance(neighbor, goal, state, BOARD_DATA)
+                    if not visited.contains(neighbor):
+                        visited.push(neighbor)
         raise StopIteration("A* did not reach the goal state")
 
     def flee(self,pos,ghost,state):
@@ -415,18 +385,30 @@ class AStarAgent(Agent):
         maxDist = 0
         maxPos = None
         for neighbor in neighbors:
-            dist = manhattanDistance(neighbor,ghost)
+            dist = aStarDistance(neighbor,ghost,state,BOARD_DATA)
             if dist > maxDist:
                 maxDist = dist
                 maxPos = neighbor
         return posToMove(pos,maxPos)
 
     def getAction(self, state):
+        assert BOARD_DATA is not None
         pacman = state.getPacmanPosition()
         closestFood = getClosestFood(state)
-        closestGhost = getClosestGhost(state)
-        if manhattanDistance(pacman,closestFood)+2 > manhattanDistance(pacman,closestGhost):
-        #if manhattanDistance(pacman,closestGhost) < 3:
+        closestGhost = tuple(map(round,getClosestGhost(state)))
+        distToGhost = aStarDistance(pacman,closestGhost,state,BOARD_DATA)
+
+        ghostState = None
+        for agent in state.data.agentStates:
+            if tuple(map(round,agent.getPosition())) == closestGhost:
+                ghostState = agent
+        assert ghostState is not None
+
+        if ghostState.scaredTimer > 1:
+            #Chase vulnerable ghosts
+            return self.AStar(pacman,closestGhost,state)
+        if aStarDistance(pacman,closestFood,state,BOARD_DATA)+2 > distToGhost and distToGhost < 5:
+            #Run away if ghost is close
             return self.flee(pacman,closestGhost,state)
         return self.AStar(pacman,closestFood,state)
         
