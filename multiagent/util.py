@@ -288,7 +288,7 @@ def aStarDistance(xy1,xy2,state,BOARD_DATA):
                 f_score[neighbor] = tentative + manhattanDistance(neighbor, xy2)
                 if not visited.contains(neighbor):
                     visited.push(neighbor)
-    raise StopIteration("A* did not reach the goal state")
+    raise StopIteration(f"A* did not reach goal state {xy2} from {xy1}")
 
 """
   Data structures and functions useful for various course projects

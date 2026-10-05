@@ -64,6 +64,9 @@ def randomMinIndex(lst):
     minIndices = [index for index, value in enumerate(lst) if value == minVal]
     return random.choice(minIndices)
 
+def normalizePos(pos):
+    return tuple(map(round,pos))
+
 class MultiAgentSearchAgent(Agent):
     """
       This class provides some common elements to all of your
@@ -378,14 +381,14 @@ class AStarAgent(Agent):
                         visited.push(neighbor)
         raise StopIteration("A* did not reach the goal state")
 
-    def flee(self,pos,ghost,state):
+    def flee(self,pos,ghosts,state):
         "Runs away as efficiently as possible"
         assert BOARD_DATA is not None
         neighbors = get_neighbors(pos, state)
         maxDist = 0
         maxPos = None
         for neighbor in neighbors:
-            dist = aStarDistance(neighbor,ghost,state,BOARD_DATA)
+            dist = sum([aStarDistance(neighbor,ghost[0],state,BOARD_DATA) for ghost in ghosts])
             if dist > maxDist:
                 maxDist = dist
                 maxPos = neighbor
@@ -393,25 +396,33 @@ class AStarAgent(Agent):
 
     def getAction(self, state):
         assert BOARD_DATA is not None
+        safe_distance = 5
         pacman = state.getPacmanPosition()
         closestFood = getClosestFood(state)
-        closestGhost = tuple(map(round,getClosestGhost(state)))
-        distToGhost = aStarDistance(pacman,closestGhost,state,BOARD_DATA)
+        closestGhosts = []
+        for ghost in state.getGhostPositions():
+            ghostState = None
+            pos = normalizePos(ghost)
+            ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+            if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
+                for agent in state.data.agentStates:
+                    agentPos = agent.getPosition()
+                    if agentPos == ghost: 
+                        ghostState = agent
+                        closestGhosts.append((pos,agent,ghostDist))
+                        continue
+                if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
 
-        ghostState = None
-        for agent in state.data.agentStates:
-            if tuple(map(round,agent.getPosition())) == closestGhost:
-                ghostState = agent
-        assert ghostState is not None
-
-        if ghostState.scaredTimer > 1:
+        closestGhost = getClosestGhost(state)
+        closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
+        assert closestState is not None
+        if closestState.scaredTimer > 1:
             #Chase vulnerable ghosts
-            return self.AStar(pacman,closestGhost,state)
-        if aStarDistance(pacman,closestFood,state,BOARD_DATA)+2 > distToGhost and distToGhost < 5:
-            #Run away if ghost is close
-            return self.flee(pacman,closestGhost,state)
+            return self.AStar(pacman,normalizePos(closestGhost),state)
+        if closestGhosts:
+            #Run away if ghosts are close
+            return self.flee(pacman,closestGhosts,state)
         return self.AStar(pacman,closestFood,state)
-        
 
 class naiveQLearningAgent(Agent):
     """
