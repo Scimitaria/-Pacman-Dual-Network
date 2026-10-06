@@ -18,6 +18,7 @@ from game import Directions, Agent
 from enum import Enum
 import random, json
 import numpy as np # type: ignore
+random.seed(69)
 
 class Action(Enum):
     North = 0
@@ -423,6 +424,117 @@ class AStarAgent(Agent):
             #Run away if ghosts are close
             return self.flee(pacman,closestGhosts,state)
         return self.AStar(pacman,closestFood,state)
+
+class randStateAgent(Agent):
+    """
+    Uses A* to find the next action
+    Closest food if safe, flees if in danger
+    """
+
+    def get_min_score_node(self,visited,f_score):
+        min_score = float('inf')
+        min_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score < min_score:
+                min_score = score
+                min_score_node = pos
+        return min_score_node
+    def get_max_score_node(self,visited,f_score):
+        max_score = float('-inf')
+        max_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score > max_score:
+                max_score = score
+                max_score_node = pos
+        return max_score_node
+
+    def reconstruct_path(self,came_from,current):
+        path = [current]
+        while current in came_from:
+            current=came_from[current]
+            path.insert(0,current)
+        return path
+
+    def AStar(self,pos,goal,state):
+        "Returns the first state towards the closest food"
+        assert BOARD_DATA is not None
+        #nodes visited
+        visited=Queue()
+        visited.push(pos)
+        #preceding node
+        came_from = {}
+        #cost from start to n
+        g_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        g_score[pos]=0
+        #cost from start to goal
+        f_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        f_score[pos]=aStarDistance(pos,goal,state,BOARD_DATA)
+        while not visited.isEmpty():
+            #lowest cost node
+            current = self.get_min_score_node(visited,f_score)
+            if current == goal: 
+                path = self.reconstruct_path(came_from,current)
+                return posToMove(pos,path[1])
+            visited.pop(current)
+
+            neighbors = get_neighbors(current, state)
+            for neighbor in neighbors:
+                tentative = g_score[current] + 1
+                if tentative < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative
+                    f_score[neighbor] = tentative + aStarDistance(neighbor, goal, state, BOARD_DATA)
+                    if not visited.contains(neighbor):
+                        visited.push(neighbor)
+        raise StopIteration("A* did not reach the goal state")
+
+    def flee(self,pos,ghosts,state):
+        "Runs away as efficiently as possible"
+        assert BOARD_DATA is not None
+        neighbors = get_neighbors(pos, state)
+        maxDist = 0
+        maxPos = None
+        for neighbor in neighbors:
+            dist = sum([aStarDistance(neighbor,ghost[0],state,BOARD_DATA) for ghost in ghosts])
+            if dist > maxDist:
+                maxDist = dist
+                maxPos = neighbor
+        if maxPos is None: maxPos = random.choice(neighbors)
+        return posToMove(pos,maxPos)
+
+    def getAction(self, state):
+        assert BOARD_DATA is not None
+        safe_distance = 5
+        pacman = state.getPacmanPosition()
+        closestFood = getClosestFood(state)
+        closestGhosts = []
+        for ghost in state.getGhostPositions():
+            ghostState = None
+            pos = normalizePos(ghost)
+            ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+            if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
+                for agent in state.data.agentStates:
+                    agentPos = agent.getPosition()
+                    if agentPos == ghost: 
+                        ghostState = agent
+                        closestGhosts.append((pos,agent,ghostDist))
+                        continue
+                if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
+
+        closestGhost = getClosestGhost(state)
+        closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
+        assert closestState is not None
+
+        match random.randint(0,2):
+            case 0:
+                #Chase vulnerable ghosts
+                return self.AStar(pacman,normalizePos(closestGhost),state)
+            case 1:
+                #Run away
+                return self.flee(pacman,closestGhosts,state)
+            case _: return self.AStar(pacman,closestFood,state)
 
 class naiveQLearningAgent(Agent):
     """
