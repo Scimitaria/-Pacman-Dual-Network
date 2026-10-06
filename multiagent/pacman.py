@@ -493,7 +493,7 @@ def readCommand( argv ):
                       metavar='LAYOUT_FILE', default='mediumClassic')
     parser.add_option('-p', '--pacman', dest='pacman',
                       help=default('the agent TYPE in the pacmanAgents module to use'),
-                      metavar='TYPE', default='randStateAgent')
+                      metavar='TYPE', default='AStarAgent')
     parser.add_option('--doNotFlushOutput',action='store_true', dest='flushOutput',
                       help='remove output flushing for easier debug printing', default=False)
     parser.add_option('-t', '--textGraphics', action='store_true', dest='textGraphics',

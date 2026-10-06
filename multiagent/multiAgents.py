@@ -18,7 +18,7 @@ from game import Directions, Agent
 from enum import Enum
 import random, json
 import numpy as np # type: ignore
-random.seed(69)
+#random.seed(69)
 
 class Action(Enum):
     North = 0
@@ -322,6 +322,9 @@ class AStarAgent(Agent):
     Uses A* to find the next action
     Closest food if safe, flees if in danger
     """
+    def __init__(self, index=0):
+        super().__init__(index)
+        self.last_action = None
 
     def get_min_score_node(self,visited,f_score):
         min_score = float('inf')
@@ -396,40 +399,45 @@ class AStarAgent(Agent):
         return posToMove(pos,maxPos)
 
     def getAction(self, state):
-        assert BOARD_DATA is not None
-        safe_distance = 5
-        pacman = state.getPacmanPosition()
-        closestFood = getClosestFood(state)
-        closestGhosts = []
-        for ghost in state.getGhostPositions():
-            ghostState = None
-            pos = normalizePos(ghost)
-            ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
-            if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
-                for agent in state.data.agentStates:
-                    agentPos = agent.getPosition()
-                    if agentPos == ghost: 
-                        ghostState = agent
-                        closestGhosts.append((pos,agent,ghostDist))
-                        continue
-                if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
+        if not state.isJunction() and self.last_action is not None: return self.last_action
+        else:
+            assert BOARD_DATA is not None
+            safe_distance = 5
+            pacman = state.getPacmanPosition()
+            closestFood = getClosestFood(state)
+            closestGhosts = []
+            for ghost in state.getGhostPositions():
+                ghostState = None
+                pos = normalizePos(ghost)
+                ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+                if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
+                    for agent in state.data.agentStates:
+                        agentPos = agent.getPosition()
+                        if agentPos == ghost: 
+                            ghostState = agent
+                            closestGhosts.append((pos,agent,ghostDist))
+                            continue
+                    if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
 
-        closestGhost = getClosestGhost(state)
-        closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
-        assert closestState is not None
-        if closestState.scaredTimer > 1:
-            #Chase vulnerable ghosts
-            return self.AStar(pacman,normalizePos(closestGhost),state)
-        if closestGhosts:
-            #Run away if ghosts are close
-            return self.flee(pacman,closestGhosts,state)
-        return self.AStar(pacman,closestFood,state)
+            closestGhost = getClosestGhost(state)
+            closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
+            assert closestState is not None
+            if closestState.scaredTimer > 1:
+                #Chase vulnerable ghosts
+                return self.AStar(pacman,normalizePos(closestGhost),state)
+            if closestGhosts:
+                #Run away if ghosts are close
+                return self.flee(pacman,closestGhosts,state)
+            return self.AStar(pacman,closestFood,state)
 
 class randStateAgent(Agent):
     """
     Uses A* to find the next action
     Closest food if safe, flees if in danger
     """
+    def __init__(self, index=0):
+        super().__init__(index)
+        self.last_action = None
 
     def get_min_score_node(self,visited,f_score):
         min_score = float('inf')
@@ -505,36 +513,38 @@ class randStateAgent(Agent):
         return posToMove(pos,maxPos)
 
     def getAction(self, state):
-        assert BOARD_DATA is not None
-        safe_distance = 5
-        pacman = state.getPacmanPosition()
-        closestFood = getClosestFood(state)
-        closestGhosts = []
-        for ghost in state.getGhostPositions():
-            ghostState = None
-            pos = normalizePos(ghost)
-            ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
-            if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
-                for agent in state.data.agentStates:
-                    agentPos = agent.getPosition()
-                    if agentPos == ghost: 
-                        ghostState = agent
-                        closestGhosts.append((pos,agent,ghostDist))
-                        continue
-                if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
+        if not state.isJunction() and self.last_action is not None: return self.last_action
+        else:
+            assert BOARD_DATA is not None
+            safe_distance = 5
+            pacman = state.getPacmanPosition()
+            closestFood = getClosestFood(state)
+            closestGhosts = []
+            for ghost in state.getGhostPositions():
+                ghostState = None
+                pos = normalizePos(ghost)
+                ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+                if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
+                    for agent in state.data.agentStates:
+                        agentPos = agent.getPosition()
+                        if agentPos == ghost: 
+                            ghostState = agent
+                            closestGhosts.append((pos,agent,ghostDist))
+                            continue
+                    if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
 
-        closestGhost = getClosestGhost(state)
-        closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
-        assert closestState is not None
+            closestGhost = getClosestGhost(state)
+            closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
+            assert closestState is not None
 
-        match random.randint(0,2):
-            case 0:
-                #Chase vulnerable ghosts
-                return self.AStar(pacman,normalizePos(closestGhost),state)
-            case 1:
-                #Run away
-                return self.flee(pacman,closestGhosts,state)
-            case _: return self.AStar(pacman,closestFood,state)
+            match random.randint(0,2):
+                case 0:
+                    #Chase vulnerable ghosts
+                    return self.AStar(pacman,normalizePos(closestGhost),state)
+                case 1:
+                    #Run away
+                    return self.flee(pacman,closestGhosts,state)
+                case _: return self.AStar(pacman,closestFood,state)
 
 class naiveQLearningAgent(Agent):
     """
