@@ -47,6 +47,13 @@ def getClosestGhost(state):
     ghostDistance = []
     for pos in ghosts: ghostDistance.append(aStarDistance(pacman,tuple(map(round,pos)),state,BOARD_DATA))
     return ghosts[randomMinIndex(ghostDistance)]
+def getClosestCapsule(state):
+    capsules = state.getCapsules()
+    if not capsules: return None
+    pacman = state.getPacmanPosition()
+    capsuleDistances = []
+    for pos in capsules: capsuleDistances.append(aStarDistance(pacman,pos,state,BOARD_DATA))
+    return capsules[randomMinIndex(capsuleDistances)]
 
 def getPosFromIndex(index):
     assert BOARD_DATA is not None
@@ -322,9 +329,9 @@ class AStarAgent(Agent):
     Uses A* to find the next action
     Closest food if safe, flees if in danger
     """
-    def __init__(self, index=0):
-        super().__init__(index)
-        self.last_action = None
+    #def __init__(self, index=0):
+    #    super().__init__(index)
+    #    self.last_action = None
 
     def get_min_score_node(self,visited,f_score):
         min_score = float('inf')
@@ -399,13 +406,15 @@ class AStarAgent(Agent):
         return posToMove(pos,maxPos)
 
     def getAction(self, state):
-        if not state.isJunction() and self.last_action is not None: return self.last_action
+        if False:pass#not state.isJunction() and self.last_action is not None: return self.last_action
         else:
             assert BOARD_DATA is not None
             safe_distance = 5
             pacman = state.getPacmanPosition()
             closestFood = getClosestFood(state)
             closestGhosts = []
+            closestCapsule = getClosestCapsule(state)
+
             for ghost in state.getGhostPositions():
                 ghostState = None
                 pos = normalizePos(ghost)
@@ -428,6 +437,9 @@ class AStarAgent(Agent):
             if closestGhosts:
                 #Run away if ghosts are close
                 return self.flee(pacman,closestGhosts,state)
+            if closestCapsule is not None:
+                #Eat capsules
+                return self.AStar(pacman,closestCapsule,state)
             return self.AStar(pacman,closestFood,state)
 
 class randStateAgent(Agent):
