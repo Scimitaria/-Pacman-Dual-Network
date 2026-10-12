@@ -637,3 +637,185 @@ class naiveQLearningAgent(Agent):
                     json.dump(q_table_json, file, indent=4)
             self.isTraining = False
         return self.getBestLegalAction(self.assembleTableState(state),state.getLegalActions())
+
+class QLearningAgent(Agent):
+    """
+    Uses a Q-learning algorithm to select the best policy
+
+    Reference: https://www.geeksforgeeks.org/machine-learning/q-learning-in-python/
+    """
+    def __init__(self):
+        self.alpha   = 0.8 # learning rate    - determines impact of new information
+        self.gamma   = 0.3 # discount         - balances immediate and future rewards
+        self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
+        self.epochs  = 100
+        self.gameDepth = 10
+
+        self.policies = ["Eat pellets","Chase ghosts","Eat capsules","Flee ghosts"]
+        with open('q.json','r') as q: data = json.load(q)
+        self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
+
+        self.isTraining = True
+
+    #TODO: def show_Q_table(self):
+
+    def get_min_score_node(self,visited,f_score):
+        min_score = float('inf')
+        min_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score < min_score:
+                min_score = score
+                min_score_node = pos
+        return min_score_node
+    def get_max_score_node(self,visited,f_score):
+        max_score = float('-inf')
+        max_score_node = None
+        for pos in visited.list:
+            score = f_score[pos]
+            if score > max_score:
+                max_score = score
+                max_score_node = pos
+        return max_score_node
+
+    def reconstruct_path(self,came_from,current):
+        path = [current]
+        while current in came_from:
+            current=came_from[current]
+            path.insert(0,current)
+        return path
+
+    def AStar(self,pos,goal,state):
+        "Returns the first state towards the closest food"
+        assert BOARD_DATA is not None
+        #nodes visited
+        visited=Queue()
+        visited.push(pos)
+        #preceding node
+        came_from = {}
+        #cost from start to n
+        g_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        g_score[pos]=0
+        #cost from start to goal
+        f_score = np.full((BOARD_DATA.width,BOARD_DATA.height),np.inf)
+        f_score[pos]=aStarDistance(pos,goal,state,BOARD_DATA)
+        while not visited.isEmpty():
+            #lowest cost node
+            current = self.get_min_score_node(visited,f_score)
+            if current == goal: 
+                path = self.reconstruct_path(came_from,current)
+                return posToMove(pos,path[1])
+            visited.pop(current)
+
+            neighbors = get_neighbors(current, state)
+            for neighbor in neighbors:
+                tentative = g_score[current] + 1
+                if tentative < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative
+                    f_score[neighbor] = tentative + aStarDistance(neighbor, goal, state, BOARD_DATA)
+                    if not visited.contains(neighbor):
+                        visited.push(neighbor)
+        raise StopIteration("A* did not reach the goal state")
+
+    def flee(self,pos,ghosts,state):
+        "Runs away as efficiently as possible"
+        if not ghosts: return random.choice(state.getLegalPacmanActions())
+        assert BOARD_DATA is not None
+        neighbors = get_neighbors(pos, state)
+        maxDist = 0
+        maxPos = None
+        for neighbor in neighbors:
+            dist = sum([aStarDistance(neighbor,ghost[0],state,BOARD_DATA) for ghost in ghosts])
+            if dist > maxDist:
+                maxDist = dist
+                maxPos = neighbor
+        return posToMove(pos,maxPos)
+
+
+    def assembleTableState(self,state):
+        (px,py) = state.getPacmanPosition()
+        (fx,fy) = getClosestFood(state)
+        (gx,gy) = getClosestGhost(state)
+        return ((px,py),(fx-px,fy-py),(gx-px,gy-py))
+
+    def getBestPolicy(self, state):
+        try:
+            state_qs = self.q_table[state]
+            policies = {policy: state_qs[policy] for policy in self.policies}
+            return max(policies,key=policies.get) # type: ignore
+        except:
+            return random.choice(self.policies)
+
+    def getActionFromPolicy(self, state, policy):
+        safe_distance = 5
+        pacman = state.getPacmanPosition()
+        closestFood = getClosestFood(state)
+        closestGhosts = []
+        closestCapsule = getClosestCapsule(state)
+
+        for ghost in state.getGhostPositions():
+            ghostState = None
+            pos = normalizePos(ghost)
+            ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+            if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
+                for agent in state.data.agentStates:
+                    agentPos = agent.getPosition()
+                    if agentPos == ghost: 
+                        ghostState = agent
+                        closestGhosts.append((pos,agent,ghostDist))
+                        continue
+                if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
+
+        closestGhost = getClosestGhost(state)
+
+        if policy == "Chase ghosts": return self.AStar(pacman,normalizePos(closestGhost),state)
+        if policy == "Flee ghosts" and closestGhosts:  return self.flee(pacman,closestGhosts,state)
+        if policy == "Eat capsules" and closestCapsule is not None: return self.AStar(pacman,closestCapsule,state)
+        return self.AStar(pacman,closestFood,state)
+
+    def getBestQValue(self, state):
+        try: return max(self.q_table[state].values())
+        except: return 0
+
+    def update_Q_table(self,state):
+        assert self.q_table is not None
+
+        current_state  = state
+        current_qState = self.assembleTableState(state)
+
+        for _ in range(self.gameDepth): #iteration is faster and less memory intensive
+            if np.random.rand() < self.epsilon: policy = random.choice(self.policies)
+            else: policy = self.getBestPolicy(current_qState)
+
+            new_state = current_state.generatePacmanSuccessor(self.getActionFromPolicy(current_state,policy))
+            if new_state.getFood().isEmpty(): break
+            new_qState = self.assembleTableState(new_state)
+
+            reward = betterEvaluationFunction(new_state)
+            try: current_q = self.q_table[current_qState][policy]
+            except: current_q = 0
+
+            try: self.q_table[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
+            except:
+                self.q_table[current_qState] = {}
+                self.q_table[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
+
+            current_state = new_state
+            current_qState = new_qState
+
+    def getAction(self,state):
+        assert BOARD_DATA is not None
+        if self.isTraining:
+            for epoch in range(self.epochs):
+                tPrint(f"Epochs: {epoch}")
+                self.update_Q_table(state)
+                with open('q.json','w') as file:
+                    file.seek(0)
+                    file.truncate()
+                    q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
+                    json.dump(q_table_json, file, indent=4)
+            self.isTraining = False
+        
+        policy = self.getBestPolicy(self.assembleTableState(state))
+        return self.getActionFromPolicy(state,policy)
