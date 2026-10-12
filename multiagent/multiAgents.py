@@ -45,7 +45,9 @@ def getClosestGhost(state):
     pacman = state.getPacmanPosition()
     ghosts = state.getGhostPositions()
     ghostDistance = []
-    for pos in ghosts: ghostDistance.append(aStarDistance(pacman,tuple(map(round,pos)),state,BOARD_DATA))
+    for pos in ghosts: 
+        try: ghostDistance.append(aStarDistance(pacman,tuple(map(round,pos)),state,BOARD_DATA))
+        except: ghostDistance.append(manhattanDistance(pacman,tuple(map(round,pos))))
     return ghosts[randomMinIndex(ghostDistance)]
 def getClosestCapsule(state):
     capsules = state.getCapsules()
@@ -649,7 +651,7 @@ class QLearningAgent(Agent):
         self.gamma   = 0.3 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
         self.epochs  = 100
-        self.gameDepth = 10
+        self.gameDepth = 100
 
         self.policies = ["Eat pellets","Chase ghosts","Eat capsules","Flee ghosts"]
         with open('q.json','r') as q: data = json.load(q)
@@ -726,7 +728,8 @@ class QLearningAgent(Agent):
         maxDist = 0
         maxPos = None
         for neighbor in neighbors:
-            dist = sum([aStarDistance(neighbor,ghost[0],state,BOARD_DATA) for ghost in ghosts])
+            try: dist = sum([aStarDistance(neighbor,ghost[0],state,BOARD_DATA) for ghost in ghosts])
+            except: dist = sum([manhattanDistance(neighbor,ghost[0]) for ghost in ghosts])
             if dist > maxDist:
                 maxDist = dist
                 maxPos = neighbor
@@ -746,7 +749,6 @@ class QLearningAgent(Agent):
             return max(policies,key=policies.get) # type: ignore
         except:
             return random.choice(self.policies)
-
     def getActionFromPolicy(self, state, policy):
         safe_distance = 5
         pacman = state.getPacmanPosition()
@@ -757,7 +759,8 @@ class QLearningAgent(Agent):
         for ghost in state.getGhostPositions():
             ghostState = None
             pos = normalizePos(ghost)
-            ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+            try: ghostDist = aStarDistance(pos,pacman,state,BOARD_DATA)
+            except: ghostDist = manhattanDistance(pos,pacman)
             if ghostDist < safe_distance and ghostDist < aStarDistance(pacman,closestFood,state,BOARD_DATA)+2:
                 for agent in state.data.agentStates:
                     agentPos = agent.getPosition()
@@ -768,8 +771,13 @@ class QLearningAgent(Agent):
                 if ghostState is None: raise IndexError(f"Ghost state not found. \n\tPosition: {ghost}; \n\tghost positions: {[agent.getPosition() for agent in state.data.agentStates]}")
 
         closestGhost = getClosestGhost(state)
+        closestState = [ghost for ghost in state.data.agentStates if ghost.getPosition() == closestGhost][0]
+        assert closestState is not None
 
-        if policy == "Chase ghosts": return self.AStar(pacman,normalizePos(closestGhost),state)
+        #Had to add cond back in to prevent length-1 A* path
+        if policy == "Chase ghosts" and closestState.scaredTimer>1:
+            try: return self.AStar(pacman,closestGhost,state)
+            except StopIteration: pass
         if policy == "Flee ghosts" and closestGhosts:  return self.flee(pacman,closestGhosts,state)
         if policy == "Eat capsules" and closestCapsule is not None: return self.AStar(pacman,closestCapsule,state)
         return self.AStar(pacman,closestFood,state)
@@ -785,11 +793,12 @@ class QLearningAgent(Agent):
         current_qState = self.assembleTableState(state)
 
         for _ in range(self.gameDepth): #iteration is faster and less memory intensive
+            if current_state.isLose() or current_state.isWin(): break
             if np.random.rand() < self.epsilon: policy = random.choice(self.policies)
             else: policy = self.getBestPolicy(current_qState)
 
             new_state = current_state.generatePacmanSuccessor(self.getActionFromPolicy(current_state,policy))
-            if new_state.getFood().isEmpty(): break
+            if new_state.isLose() or new_state.isWin(): break
             new_qState = self.assembleTableState(new_state)
 
             reward = betterEvaluationFunction(new_state)
