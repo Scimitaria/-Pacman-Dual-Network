@@ -44,6 +44,7 @@ from game import GameStateData,Game,Directions,Actions
 from util import nearestPoint,manhattanDistance
 import layout, sys, random, os
 from multiAgents import set_board_data
+from concurrent.futures import ThreadPoolExecutor
 
 ###################################################
 # YOUR INTERFACE TO THE PACMAN WORLD: A GameState #
@@ -493,13 +494,15 @@ def readCommand( argv ):
                       metavar='LAYOUT_FILE', default='mediumClassic')
     parser.add_option('-p', '--pacman', dest='pacman',
                       help=default('the agent TYPE in the pacmanAgents module to use'),
-                      metavar='TYPE', default='QLearningAgent')
+                      metavar='TYPE', default='AStarAgent')
     parser.add_option('--doNotFlushOutput',action='store_true', dest='flushOutput',
                       help='remove output flushing for easier debug printing', default=False)
     parser.add_option('-t', '--textGraphics', action='store_true', dest='textGraphics',
                       help='Display output as text only', default=False)
     parser.add_option('-q', '--quietTextGraphics', action='store_true', dest='quietGraphics',
                       help='Generate minimal output and no graphics', default=False)
+    parser.add_option('-m', '--multithread', action='store_true', dest='multithread',
+                      help='Multithread the games', default=False)
     parser.add_option('-g', '--ghosts', dest='ghost',
                       help=default('the ghost agent TYPE in the ghostAgents module to use'),
                       metavar = 'TYPE', default='RandomGhost')
@@ -570,6 +573,7 @@ def readCommand( argv ):
     args['record'] = options.record
     args['catchExceptions'] = options.catchExceptions
     args['timeout'] = options.timeout
+    args['multithread'] = options.multithread
 
     # Special case: recorded games don't use the runGames method or args structure
     if options.gameToReplay != None:
@@ -625,14 +629,14 @@ def replayGame( layout, actions, display ):
 
     display.finish()
 
-def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0, catchExceptions=False, timeout=30 ):
+def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0, catchExceptions=False, timeout=30, multithread=False ):
     import __main__
     __main__.__dict__['_display'] = display
 
     rules = ClassicGameRules(timeout)
     games = []
 
-    for i in range( numGames ):
+    def rg(i):
         beQuiet = i < numTraining
         if beQuiet:
                 # Suppress output and graphics
@@ -653,6 +657,11 @@ def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0
             components = {'layout': layout, 'actions': game.moveHistory}
             pickle.dump(components, f) # type: ignore
             f.close()
+
+    if multithread:
+        with ThreadPoolExecutor() as executor: executor.map(rg,range(numGames))
+    else:
+        for i in range(numGames): rg(i)
 
     if (numGames-numTraining) > 0:
         scores = [game.state.getScore() for game in games]

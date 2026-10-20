@@ -579,8 +579,6 @@ class naiveQLearningAgent(Agent):
 
         self.isTraining = True
 
-    #TODO: def show_Q_table(self):
-
     def assembleTableState(self,state):
         (px,py) = state.getPacmanPosition()
         (fx,fy) = getClosestFood(state)
@@ -658,8 +656,6 @@ class QLearningAgent(Agent):
         self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
 
         self.isTraining = True
-
-    #TODO: def show_Q_table(self):
 
     def get_min_score_node(self,visited,f_score):
         min_score = float('inf')

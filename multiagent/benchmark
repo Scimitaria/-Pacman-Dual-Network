@@ -22,10 +22,10 @@ function toPercent {
     printf "%d%%" $num
 }
 
-numIterations=5
+numIterations=10
 
 function analyze {
-    out=$(python pacman.py --numGames $numIterations --quietTextGraphics --pacman $1)
+    out=$(python pacman.py --numGames $numIterations --quietTextGraphics --multithread --pacman $1)
 
     if [[ "$out" =~ '\(([0-9]\.[0-9]{2})\)' ]]; then
         extracted=$(toPercent "$match[1]")
@@ -37,6 +37,7 @@ function analyze {
     fi 
 }
 
-analyze RandomAgent "Random"
+analyze RandomAgent "Random Action"
 analyze AStarAgent "A*"
+analyze randStateAgent "Random Policy"
 analyze QLearningAgent "Q-Learning"
