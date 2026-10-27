@@ -648,7 +648,7 @@ class QLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.3 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 10
+        self.epochs  = 100
         self.gameDepth = 100
 
         self.file_lock = threading.Lock()
