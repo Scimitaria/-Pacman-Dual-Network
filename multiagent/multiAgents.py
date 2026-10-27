@@ -16,9 +16,8 @@
 from util import Queue, manhattanDistance, aStarDistance, tPrint, lookup, posToMove, get_neighbors
 from game import Directions, Agent
 from enum import Enum
-import random, json
+import random, json, threading
 import numpy as np # type: ignore
-#random.seed(69)
 
 class Action(Enum):
     North = 0
@@ -563,6 +562,7 @@ class randStateAgent(Agent):
 class naiveQLearningAgent(Agent):
     """
     Uses a Q-learning algorithm to select the next action
+    Currently broken
 
     Reference: https://www.geeksforgeeks.org/machine-learning/q-learning-in-python/
     """
@@ -648,13 +648,18 @@ class QLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.3 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 100
+        self.epochs  = 10
         self.gameDepth = 100
 
-        self.policies = ["Eat pellets","Chase ghosts","Eat capsules","Flee ghosts"]
-        with open('q.json','r') as q: data = json.load(q)
-        self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
+        self.file_lock = threading.Lock()
 
+        self.policies = ["Eat pellets","Chase ghosts","Eat capsules","Flee ghosts"]
+        with self.file_lock:
+            with open('q.json','r') as q: data = json.load(q)
+        self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
+#read from table once
+#create individual dict with changes
+#call dict.update at end
         self.isTraining = True
 
     def get_min_score_node(self,visited,f_score):
@@ -782,11 +787,21 @@ class QLearningAgent(Agent):
         try: return max(self.q_table[state].values())
         except: return 0
 
+    def save_q_table(self):
+        with self.file_lock:
+            q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
+            with open('q.json', "w") as file: 
+                file.seek(0)
+                file.truncate()
+                json.dump(q_table_json, file, indent=4)
+
     def update_Q_table(self,state):
         assert self.q_table is not None
 
         current_state  = state
         current_qState = self.assembleTableState(state)
+
+        tempQ = {}
 
         for _ in range(self.gameDepth): #iteration is faster and less memory intensive
             if current_state.isLose() or current_state.isWin(): break
@@ -801,25 +816,27 @@ class QLearningAgent(Agent):
             try: current_q = self.q_table[current_qState][policy]
             except: current_q = 0
 
-            try: self.q_table[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
+            try: tempQ[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
             except:
-                self.q_table[current_qState] = {}
-                self.q_table[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
+                tempQ[current_qState] = {}
+                tempQ[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
 
             current_state = new_state
             current_qState = new_qState
 
+        with self.file_lock: self.q_table.update(tempQ)
+
+    def train(self, state):
+        for epoch in range(self.epochs): 
+            tPrint(f"Epochs: {epoch}")
+            self.update_Q_table(state)
+        self.save_q_table()
+
+
     def getAction(self,state):
         assert BOARD_DATA is not None
         if self.isTraining:
-            for epoch in range(self.epochs):
-                tPrint(f"Epochs: {epoch}")
-                self.update_Q_table(state)
-                with open('q.json','w') as file:
-                    file.seek(0)
-                    file.truncate()
-                    q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
-                    json.dump(q_table_json, file, indent=4)
+            self.train(state)
             self.isTraining = False
         
         policy = self.getBestPolicy(self.assembleTableState(state))

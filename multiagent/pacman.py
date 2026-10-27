@@ -659,7 +659,7 @@ def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0
             f.close()
 
     if multithread:
-        with ThreadPoolExecutor() as executor: executor.map(rg,range(numGames))
+        with ThreadPoolExecutor(max_workers=2) as executor: executor.map(rg,range(numGames))
     else:
         for i in range(numGames): rg(i)
 
