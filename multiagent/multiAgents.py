@@ -15,8 +15,9 @@
 
 from util import Queue, manhattanDistance, aStarDistance, tPrint, lookup, posToMove, get_neighbors
 from game import Directions, Agent
+from concurrent.futures import ProcessPoolExecutor
 from enum import Enum
-import random, json, threading
+import random, json, os
 import numpy as np # type: ignore
 
 class Action(Enum):
@@ -30,6 +31,11 @@ BOARD_DATA = None
 def set_board_data(board):
     global BOARD_DATA
     BOARD_DATA=board
+
+PARALLEL = None
+def set_parallel():
+    global PARALLEL
+    PARALLEL = True
 
 def getClosestFood(state):
     pacman = state.getPacmanPosition()
@@ -644,23 +650,25 @@ class QLearningAgent(Agent):
 
     Reference: https://www.geeksforgeeks.org/machine-learning/q-learning-in-python/
     """
-    def __init__(self):
+    def __init__(self, q_table=None):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.3 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
         self.epochs  = 100
         self.gameDepth = 100
+        self.syncEvery = 10
 
-        self.file_lock = threading.Lock()
+        self.isTraining = True
+        self.isLearning = False
+        self.lastQState = None
+        self.lastPolicy = None
 
         self.policies = ["Eat pellets","Chase ghosts","Eat capsules","Flee ghosts"]
-        with self.file_lock:
+        if q_table is not None: self.q_table = q_table # parallel workers get the table passed in
+        else:
             with open('q.json','r') as q: data = json.load(q)
-        self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
-#read from table once
-#create individual dict with changes
-#call dict.update at end
-        self.isTraining = True
+            self.q_table = { tuple(tuple(x) for x in json.loads(key)): value for key, value in data.items() }
+        self.visits = {} # (table state, policy) -> number of updates, used to weight the parallel merge
 
     def get_min_score_node(self,visited,f_score):
         min_score = float('inf')
@@ -788,56 +796,96 @@ class QLearningAgent(Agent):
         except: return 0
 
     def save_q_table(self):
-        with self.file_lock:
-            q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
-            with open('q.json', "w") as file: 
-                file.seek(0)
-                file.truncate()
-                json.dump(q_table_json, file, indent=4)
+        q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
+        with open('q.json', "w") as file: 
+            file.seek(0)
+            file.truncate()
+            json.dump(q_table_json, file, indent=4)
 
     def update_Q_table(self,state):
-        assert self.q_table is not None
+        "Updates Q for the previous move, now that its outcome (Pacman and ghost moves) is known"
+        if self.lastQState is None: return
+        reward = betterEvaluationFunction(state)
+        future = 0 if state.isLose() or state.isWin() else self.getBestQValue(self.assembleTableState(state))
 
-        current_state  = state
-        current_qState = self.assembleTableState(state)
+        try: current_q = self.q_table[self.lastQState][self.lastPolicy]
+        except: current_q = 0
+        self.q_table.setdefault(self.lastQState, {})[self.lastPolicy] = current_q + self.alpha * (reward + self.gamma * future - current_q)
+        key = (self.lastQState, self.lastPolicy)
+        self.visits[key] = self.visits.get(key, 0) + 1
 
-        tempQ = {}
+    def merge_Q_tables(self,results):
+        "Uses federated q-learning to weight the table"
+        totals = {}
+        for result in results:
+            for (qState, policy), (q, n) in result.items():
+                weighted, count = totals.get((qState, policy), (0,0))
+                totals[(qState,policy)] = (weighted+n*q, count+n)
+        for (qState, policy), (weighted, count) in totals.items():
+            self.q_table.setdefault(qState,{})[policy] = weighted/count
 
-        for _ in range(self.gameDepth): #iteration is faster and less memory intensive
-            if current_state.isLose() or current_state.isWin(): break
-            if np.random.rand() < self.epsilon: policy = random.choice(self.policies)
-            else: policy = self.getBestPolicy(current_qState)
+    def playTrainingGame(self, layout, numGhosts):
+        "Plays one full game through game.py, learning from every move"
+        from pacman import ClassicGameRules
+        from ghostAgents import RandomGhost
+        import textDisplay
 
-            new_state = current_state.generatePacmanSuccessor(self.getActionFromPolicy(current_state,policy))
-            if new_state.isLose() or new_state.isWin(): break
-            new_qState = self.assembleTableState(new_state)
-
-            reward = betterEvaluationFunction(new_state)
-            try: current_q = self.q_table[current_qState][policy]
-            except: current_q = 0
-
-            try: tempQ[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
-            except:
-                tempQ[current_qState] = {}
-                tempQ[current_qState][policy] = current_q + self.alpha * (reward + self.gamma * self.getBestQValue(new_qState) - current_q)
-
-            current_state = new_state
-            current_qState = new_qState
-
-        with self.file_lock: self.q_table.update(tempQ)
+        ghosts = [RandomGhost(i) for i in range(1, numGhosts + 1)] #Pacman is another agent in the game with index 0
+        self.isLearning = True
+        ClassicGameRules().newGame(layout, self, ghosts, textDisplay.NullGraphics(), quiet=True).run()
+        self.isLearning = False
+#(((6, 4), (0, -2), (4.0, 2.0)), 'Chase ghosts'): (677.6023255813953, 1), (((6, 5), (0, 1), (3.0, 1.0)), 'Chase ghosts'): (683.6022346368716, 1), (((6, 6), (0, 2), (3.0, 1.0)), 'Flee ghosts'): (682.402110817942, 1), (((6, 7), (0, 1), (2.0, 0.0)), 'Flee ghosts'): (680.4019801980198, 1), (((5, 7), (1, 1), (2.0, 0.0)), 'Eat capsules'): (281.602110817942, 1)
+    def trainWorker(self,q_table, layout, numGhosts, games):
+        "Runs in its own process: plays training games on a private copy of the table, returns {(state, policy): (q, visits)}"
+        agent = QLearningAgent(q_table=q_table)
+        agent.isTraining = False
+        for _ in range(games): agent.playTrainingGame(layout, numGhosts)
+        return { (qState, policy): (agent.q_table[qState][policy], n) for (qState, policy), n in agent.visits.items() }
 
     def train(self, state):
-        for epoch in range(self.epochs): 
-            tPrint(f"Epochs: {epoch}")
-            self.update_Q_table(state)
+        "Each epoch is a full game played through game.py"
+        layout = state.data.layout
+        numGhosts = state.getNumAgents() - 1
+
+        if not PARALLEL:
+            for epoch in range(self.epochs):
+                tPrint(f"Epochs: {epoch}")
+                self.playTrainingGame(layout, numGhosts)
+        else:
+            workers = os.cpu_count() or 1
+            done = 0
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                while done < self.epochs:
+                    # Split this round's games across workers, each starting from the same table
+                    n = min(workers * self.syncEvery, self.epochs - done)
+                    games = [n // workers + (1 if i < n % workers else 0) for i in range(workers)]
+                    games = [g for g in games if g > 0]
+                    results = executor.map(self.trainWorker, [self.q_table] * len(games), [layout] * len(games), [numGhosts] * len(games), games)
+                    self.merge_Q_tables(results)
+                    done += n
+                    tPrint(f"Epochs: {done}/{self.epochs}")
         self.save_q_table()
 
+    def final(self, state):
+        "Called by game.py when a game ends"
+        if not self.isLearning: return
+        self.update_Q_table(state)
+        self.lastQState = None
+        self.lastPolicy = None
 
     def getAction(self,state):
         assert BOARD_DATA is not None
         if self.isTraining:
-            self.train(state)
             self.isTraining = False
-        
-        policy = self.getBestPolicy(self.assembleTableState(state))
+            self.train(state)
+
+        qState = self.assembleTableState(state)
+        if not self.isLearning:
+            policy = self.getBestPolicy(qState)
+        else:
+            self.update_Q_table(state)
+            if np.random.rand() < self.epsilon: policy = random.choice(self.policies)
+            else: policy = self.getBestPolicy(qState)
+            self.lastQState = qState
+            self.lastPolicy = policy
         return self.getActionFromPolicy(state,policy)

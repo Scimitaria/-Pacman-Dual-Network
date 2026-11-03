@@ -43,7 +43,7 @@ The keys are 'a', 's', 'd', and 'w' to move (or arrow keys).  Have fun!
 from game import GameStateData,Game,Directions,Actions
 from util import nearestPoint,manhattanDistance
 import layout, sys, random, os
-from multiAgents import set_board_data
+from multiAgents import set_board_data, set_parallel
 from concurrent.futures import ThreadPoolExecutor
 
 ###################################################
@@ -501,8 +501,8 @@ def readCommand( argv ):
                       help='Display output as text only', default=False)
     parser.add_option('-q', '--quietTextGraphics', action='store_true', dest='quietGraphics',
                       help='Generate minimal output and no graphics', default=False)
-    parser.add_option('-m', '--multithread', action='store_true', dest='multithread',
-                      help='Multithread the games', default=False)
+    parser.add_option('-m', '--parallel', action='store_true', dest='parallel',
+                      help='parallel the games', default=False)
     parser.add_option('-g', '--ghosts', dest='ghost',
                       help=default('the ghost agent TYPE in the ghostAgents module to use'),
                       metavar = 'TYPE', default='RandomGhost')
@@ -573,7 +573,7 @@ def readCommand( argv ):
     args['record'] = options.record
     args['catchExceptions'] = options.catchExceptions
     args['timeout'] = options.timeout
-    args['multithread'] = options.multithread
+    if options.parallel: set_parallel()
 
     # Special case: recorded games don't use the runGames method or args structure
     if options.gameToReplay != None:
@@ -629,14 +629,14 @@ def replayGame( layout, actions, display ):
 
     display.finish()
 
-def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0, catchExceptions=False, timeout=30, multithread=False ):
+def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0, catchExceptions=False, timeout=30 ):
     import __main__
     __main__.__dict__['_display'] = display
 
     rules = ClassicGameRules(timeout)
     games = []
 
-    def rg(i):
+    for i in range(numGames):
         beQuiet = i < numTraining
         if beQuiet:
                 # Suppress output and graphics
@@ -657,11 +657,6 @@ def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0
             components = {'layout': layout, 'actions': game.moveHistory}
             pickle.dump(components, f) # type: ignore
             f.close()
-
-    if multithread:
-        with ThreadPoolExecutor(max_workers=2) as executor: executor.map(rg,range(numGames))
-    else:
-        for i in range(numGames): rg(i)
 
     if (numGames-numTraining) > 0:
         scores = [game.state.getScore() for game in games]

@@ -1,2 +1,2 @@
 #!/bin/zsh
-cat {} > q.json
+echo {} > q.json
