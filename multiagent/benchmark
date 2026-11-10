@@ -40,4 +40,7 @@ function analyze {
 analyze RandomAgent "Random Action"
 analyze AStarAgent "A*"
 analyze randStateAgent "Random Policy"
+#At each of certain training thresholds, save copy of Q-table off
+#Use copies to benchmark with certain number of training epochs
+#Train once-ish; benchmark without training
 analyze QLearningAgent "Q-Learning"
