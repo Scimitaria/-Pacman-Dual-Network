@@ -17,7 +17,7 @@ from util import Queue, manhattanDistance, aStarDistance, tPrint, lookup, posToM
 from game import Directions, Agent
 from concurrent.futures import ProcessPoolExecutor
 from enum import Enum
-import random, json, os
+import random, json, os, math
 import numpy as np # type: ignore
 
 class Action(Enum):
@@ -657,6 +657,7 @@ class QLearningAgent(Agent):
         self.epochs  = 0
         self.gameDepth = 100
         self.syncEvery = 10
+        self.cores = 8
 
         self.isTraining = True
         self.isLearning = False
@@ -799,9 +800,9 @@ class QLearningAgent(Agent):
         try: return max(self.q_table[state].values())
         except: return 0
 
-    def save_q_table(self):
+    def save_q_table(self,table):
         q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
-        with open('q.json', "w") as file: 
+        with open(f"{table}.json", "w") as file: 
             file.seek(0)
             file.truncate()
             json.dump(q_table_json, file, indent=4)
@@ -865,8 +866,10 @@ class QLearningAgent(Agent):
                     results = executor.map(self.trainWorker, [self.q_table] * len(games), [layout] * len(games), [numGhosts] * len(games), games)
                     self.merge_Q_tables(results)
                     done += n
+                    inc = 10 ** math.floor(math.log10(done)) # Round down to nearest power of 10
+                    if done%inc <= (self.cores*self.syncEvery): self.save_q_table(f"q-{inc}")
                     tPrint(f"Epochs: {done}/{self.epochs}")
-        self.save_q_table()
+        self.save_q_table('q')
 
     def final(self, state):
         "Called by game.py when a game ends"

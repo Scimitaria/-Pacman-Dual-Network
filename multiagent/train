@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+for table in $(ls *0.json); do
+    ./reset_q_cache $table
+done
