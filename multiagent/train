@@ -3,3 +3,7 @@
 for table in $(ls *0.json); do
     ./reset_q_cache $table
 done
+
+EPOCHS=${1:-1000} vim -es -c "source setEpochs.vim" -c "wq" multiAgents.py
+python pacman.py --pacman QLearningAgent --parallel --quietTextGraphics
+EPOCHS=0 vim -es -c "source setEpochs.vim" -c "wq" multiAgents.py

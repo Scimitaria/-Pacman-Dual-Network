@@ -576,7 +576,7 @@ class naiveQLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.3 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 1000
+        self.epochs = 0
         self.gameDepth = 100
 
         self.actions = ['North','South','East','West','Stop']
@@ -654,12 +654,12 @@ class QLearningAgent(Agent):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
         self.gamma   = 0.3 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 0
+        self.epochs = 0
         self.gameDepth = 100
         self.syncEvery = 10
         self.cores = 8
 
-        self.isTraining = True
+        self.isTraining = self.epochs>0
         self.isLearning = False
         self.lastQState = None
         self.lastPolicy = None
@@ -753,7 +753,7 @@ class QLearningAgent(Agent):
         for (cx,cy) in state.getCapsules(): t_state+=((cx-px,cy-py))
         for g in state.getGhostStates():
             (gx,gy) = g.getPosition()
-            t_state+=(((gx-px,gy-py),g.scaredTimer))
+            t_state+=(((gx-px,gy-py),g.scaredTimer>1))
         return tuple(t_state)
 
     def getBestPolicy(self, state):
