@@ -1,0 +1,1 @@
+s/(self\.PARAM[[:space:]]*=[[:space:]]*)[0-9]+/\1VALUE/g

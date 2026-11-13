@@ -649,6 +649,8 @@ class QLearningAgent(Agent):
     Uses a Q-learning algorithm to select the best policy
 
     Reference: https://www.geeksforgeeks.org/machine-learning/q-learning-in-python/
+
+    Framework version: python pacman.py -p ApproximateQAgent -a extractor=SimpleExtractor -x 50 -n 60 -l mediumClassic
     """
     def __init__(self, q_table=None):
         self.alpha   = 0.8 # learning rate    - determines impact of new information
@@ -867,7 +869,9 @@ class QLearningAgent(Agent):
                     self.merge_Q_tables(results)
                     done += n
                     inc = 10 ** math.floor(math.log10(done)) # Round down to nearest power of 10
-                    if done%inc <= (self.cores*self.syncEvery): self.save_q_table(f"q-{inc}")
+                    if inc > lastCheckpoint:
+                        self.save_q_table(f"q-{inc}")
+                        lastCheckpoint = inc
                     tPrint(f"Epochs: {done}/{self.epochs}")
         self.save_q_table('q')
 
