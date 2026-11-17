@@ -82,6 +82,21 @@ def randomMinIndex(lst):
 def normalizePos(pos):
     return tuple(map(round,pos))
 
+NEXT_TO_DIST = 1 # maze distance at or below this is "nextto"
+NEAR_DIST    = 5 # at or below this is "near" (matches safe_distance in getActionFromPolicy), above is "far"
+def getDistanceClass(pacman, pos, state):
+    "Buckets the maze distance from pacman to pos into nextto / near / far"
+    pos = normalizePos(pos)
+    try: dist = aStarDistance(pacman, pos, state, BOARD_DATA) - 1 # aStarDistance counts squares on the path incl. the start
+    except: dist = manhattanDistance(pacman, pos)
+    if dist <= NEXT_TO_DIST: return "nextto"
+    if dist <= NEAR_DIST: return "near"
+    return "far"
+
+def toTuple(x):
+    "JSON turns tuples into lists; this turns them back at every nesting level so keys are hashable"
+    return tuple(toTuple(i) for i in x) if isinstance(x, list) else x
+
 class MultiAgentSearchAgent(Agent):
     """
       This class provides some common elements to all of your
@@ -652,11 +667,11 @@ class QLearningAgent(Agent):
 
     Framework version: python pacman.py -p ApproximateQAgent -a extractor=SimpleExtractor -x 50 -n 60 -l mediumClassic
     """
-    def __init__(self, q_table=None):
-        self.alpha   = 0.8 # learning rate    - determines impact of new information
-        self.gamma   = 0.3 # discount         - balances immediate and future rewards
+    def __init__(self, q_table=None, fixedPolicy=None):
+        self.alpha   = 0.2 # learning rate    - determines impact of new information
+        self.gamma   = 0.8 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
-        self.epochs = 0
+        self.epochs  = 10000 
         self.gameDepth = 100
         self.syncEvery = 10
         self.cores = 8
@@ -665,13 +680,25 @@ class QLearningAgent(Agent):
         self.isLearning = False
         self.lastQState = None
         self.lastPolicy = None
+        self.lastScore  = 0 # game score when the previous policy was chosen, for the reward delta
 
         self.policies = ["Eat pellets","Chase ghosts","Eat capsules","Flee ghosts"]
-        if q_table is not None: self.q_table = q_table # parallel workers get the table passed in
+
+        # Baseline mode: -a fixedPolicy=random or -a "fixedPolicy=Eat pellets" (any name from self.policies)
+        # Skips training and the Q-table entirely; every move uses that policy (or a random one each move)
+        if fixedPolicy is not None and fixedPolicy != "random" and fixedPolicy not in self.policies:
+            raise ValueError(f"fixedPolicy must be 'random' or one of {self.policies}, got {fixedPolicy!r}")
+        self.fixedPolicy = fixedPolicy
+        if fixedPolicy is not None:
+            self.isTraining = False
+            self.q_table = {}
+        elif q_table is not None: self.q_table = q_table # parallel workers get the table passed in
         else:
             with open('q.json','r') as q: data = json.load(q)
-            self.q_table = { tuple(tuple(x) if isinstance(x, list) else x for x in json.loads(key)): value for key, value in data.items() }
+            self.q_table = { toTuple(json.loads(key)): value for key, value in data.items() }
         self.visits = {} # (table state, policy) -> number of updates, used to weight the parallel merge
+        self.policyCalls = 0     # times getBestPolicy was called
+        self.randomFallbacks = 0 # times getBestPolicy picked randomly because the state wasn't in the table
 
     def get_min_score_node(self,visited,f_score):
         min_score = float('inf')
@@ -748,23 +775,48 @@ class QLearningAgent(Agent):
         return posToMove(pos,maxPos)
 
 
+    def getAStarDirection(self, pacman, pos, state):
+        "First move on the A* path from pacman to pos (North/South/East/West)"
+        pos = normalizePos(pos)
+        if pos == pacman: return "Here"
+        try: return self.AStar(pacman, pos, state)
+        except StopIteration: return "Unreachable"
+
     def assembleTableState(self,state):
         (px,py) = state.getPacmanPosition()
         (fx,fy) = getClosestFood(state)
-        t_state = ((px,py),(fx-px,fy-py))
-        for (cx,cy) in state.getCapsules(): t_state+=((cx-px,cy-py))
-        for g in state.getGhostStates():
-            (gx,gy) = g.getPosition()
-            t_state+=(((gx-px,gy-py),g.scaredTimer>1))
-        return tuple(t_state)
+        #t_state = ((px,py),(fx-px,fy-py))
+        food     = tuple(self.getAStarDirection((px,py),(fx, fy), state))
+        capsules = tuple(self.getAStarDirection((px,py), c, state) for c in state.getCapsules())
+        ghosts   = tuple(
+            (self.getAStarDirection((px,py), g.getPosition(), state), getDistanceClass((px,py), g.getPosition(), state), g.scaredTimer>1)
+            for g in state.getGhostStates()
+        )
+        # e.g. ((1,0), ("West",), (("East","near",False), ("North","far",True)))
+        return (food, capsules, ghosts)
+
+    def getPolicyQs(self, state):
+        """
+        Q values to choose from for a known state. The table only stores policies that were actually tried.
+        Training: untried policies count as 0 so they still get explored.
+        Playing:  only tried policies are considered, so "never tried" can't beat "tried and was bad".
+        """
+        state_qs = self.q_table[state]
+        if self.isLearning: return {policy: state_qs.get(policy, 0) for policy in self.policies}
+        return {policy: q for policy, q in state_qs.items() if policy in self.policies}
 
     def getBestPolicy(self, state):
-        try:
-            state_qs = self.q_table[state]
-            policies = {policy: state_qs[policy] for policy in self.policies}
-            return max(policies,key=policies.get) # type: ignore
-        except:
+        self.policyCalls += 1
+        policies = self.getPolicyQs(state) if state in self.q_table else {}
+        if not policies:
+            self.randomFallbacks += 1
             return random.choice(self.policies)
+        best = max(policies.values())
+        return random.choice([policy for policy, q in policies.items() if q == best]) # random tie-break
+
+    def logFallbacks(self, label):
+        pct = 100 * self.randomFallbacks / self.policyCalls if self.policyCalls else 0
+        tPrint(f"[{label}] getBestPolicy random fallbacks: {self.randomFallbacks}/{self.policyCalls} ({pct:.1f}%)")
     def getActionFromPolicy(self, state, policy):
         safe_distance = 5
         pacman = state.getPacmanPosition()
@@ -799,8 +851,9 @@ class QLearningAgent(Agent):
         return self.AStar(pacman,closestFood,state)
 
     def getBestQValue(self, state):
-        try: return max(self.q_table[state].values())
-        except: return 0
+        "Value of the next state for the Q update (only called while training, so untried policies count as 0)"
+        if state not in self.q_table: return 0
+        return max(self.getPolicyQs(state).values())
 
     def save_q_table(self,table):
         q_table_json = { json.dumps(key): value for key, value in self.q_table.items() }
@@ -811,7 +864,9 @@ class QLearningAgent(Agent):
     def update_Q_table(self,state):
         "Updates Q for the previous move, now that its outcome (Pacman and ghost moves) is known"
         if self.lastQState is None: return
-        reward = betterEvaluationFunction(state)
+        # Reward is the change in game score since the previous policy was chosen:
+        # +10 pellet, +200 ghost, -500 death, +500 win, -1 per time step
+        reward = state.getScore() - self.lastScore
         future = 0 if state.isLose() or state.isWin() else self.getBestQValue(self.assembleTableState(state))
 
         try: current_q = self.q_table[self.lastQState][self.lastPolicy]
@@ -827,7 +882,7 @@ class QLearningAgent(Agent):
                 weighted, count = totals.get((qState, policy), (0,0))
                 totals[(qState,policy)] = (weighted+n*q, count+n)
         for (qState, policy), (weighted, count) in totals.items():
-            self.q_table.setdefault(qState,{})[policy] = weighted/count
+            self.q_table.setdefault(qState, {})[policy] = weighted/count
 
     def playTrainingGame(self, layout, numGhosts):
         "Plays one full game through game.py, learning from every move"
@@ -841,11 +896,12 @@ class QLearningAgent(Agent):
         self.isLearning = False
 
     def trainWorker(self,q_table, layout, numGhosts, games):
-        "Runs in its own process: plays training games on a private copy of the table, returns {(state, policy): (q, visits)}"
+        "Runs in its own process: plays training games on a private copy of the table, returns ({(state, policy): (q, visits)}, (policyCalls, randomFallbacks))"
         agent = QLearningAgent(q_table=q_table)
         agent.isTraining = False
         for _ in range(games): agent.playTrainingGame(layout, numGhosts)
-        return { (qState, policy): (agent.q_table[qState][policy], n) for (qState, policy), n in agent.visits.items() }
+        qs = { (qState, policy): (agent.q_table[qState][policy], n) for (qState, policy), n in agent.visits.items() }
+        return qs, (agent.policyCalls, agent.randomFallbacks)
 
     def train(self, state):
         "Each epoch is a full game played through game.py"
@@ -859,34 +915,52 @@ class QLearningAgent(Agent):
         else:
             workers = os.cpu_count() or 1
             done = 0
+            lastCheckpoint = 0 # largest power of 10 already saved, so each q-{inc}.json is written once
             with ProcessPoolExecutor(max_workers=workers) as executor:
                 while done < self.epochs:
                     # Split this round's games across workers, each starting from the same table
                     n = min(workers * self.syncEvery, self.epochs - done)
                     games = [n // workers + (1 if i < n % workers else 0) for i in range(workers)]
                     games = [g for g in games if g > 0]
-                    results = executor.map(self.trainWorker, [self.q_table] * len(games), [layout] * len(games), [numGhosts] * len(games), games)
-                    self.merge_Q_tables(results)
+                    results = list(executor.map(self.trainWorker, [self.q_table] * len(games), [layout] * len(games), [numGhosts] * len(games), games))
+                    self.merge_Q_tables([qs for qs, _ in results])
+                    # Workers don't share memory, so each returns its own counts and they're summed here
+                    for _, (calls, fallbacks) in results:
+                        self.policyCalls += calls
+                        self.randomFallbacks += fallbacks
                     done += n
                     inc = 10 ** math.floor(math.log10(done)) # Round down to nearest power of 10
-                    if inc > lastCheckpoint:
+                    saved = inc > lastCheckpoint # first round past this power of 10
+                    if saved:
                         self.save_q_table(f"q-{inc}")
                         lastCheckpoint = inc
-                    tPrint(f"Epochs: {done}/{self.epochs}")
+                    tPrint(f"Epochs: {done}/{self.epochs} and saved: {saved} to q-{inc}")
+        self.logFallbacks("training")
+        self.policyCalls = 0 # reset so the real game is counted separately
+        self.randomFallbacks = 0
         self.save_q_table('q')
 
     def final(self, state):
         "Called by game.py when a game ends"
-        if not self.isLearning: return
+        if not self.isLearning:
+            if self.fixedPolicy is None: self.logFallbacks("game")
+            self.policyCalls = 0 # reset so each game reports its own counts
+            self.randomFallbacks = 0
+            return
         self.update_Q_table(state)
         self.lastQState = None
         self.lastPolicy = None
+        self.lastScore  = 0
 
     def getAction(self,state):
         assert BOARD_DATA is not None
         if self.isTraining:
             self.isTraining = False
             self.train(state)
+
+        if self.fixedPolicy is not None:
+            policy = random.choice(self.policies) if self.fixedPolicy == "random" else self.fixedPolicy
+            return self.getActionFromPolicy(state, policy)
 
         qState = self.assembleTableState(state)
         if not self.isLearning:
@@ -897,4 +971,5 @@ class QLearningAgent(Agent):
             else: policy = self.getBestPolicy(qState)
             self.lastQState = qState
             self.lastPolicy = policy
+            self.lastScore  = state.getScore()
         return self.getActionFromPolicy(state,policy)
