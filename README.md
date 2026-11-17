@@ -2,12 +2,17 @@
 Artificial Intelligence project designed by UC Berkeley to develop game agents for Pacman using search algorithms and reinforcement learning
 
 Run with
-```python pacman.py --textGraphics```
+```python pacman.py --textGraphics --pacman <agent> --layout <layout>```
 
 ## Files:
 pacman.py, game.py: implementations for Pacman framework.  
 keyboardAgents.py : agents for interactive play via keyboard.  
 multiAgents.py    : AI agents.  
+
+## Scripts:  
+- `reset_q_cache`: resets a Q-table JSON cache  
+- `train`: trains various levels of Q-table and preps for benchmark testing  
+- `benchmark`: tests various agents on a set number of games to compare performance
 
 # PacmanAI (original desc)
 Project Link :

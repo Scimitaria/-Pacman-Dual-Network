@@ -672,6 +672,7 @@ class QLearningAgent(Agent):
         self.gamma   = 0.8 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
         self.epochs  = 1000 
+        self.epochs  = 0
         self.gameDepth = 100
         self.syncEvery = 10
         self.cores = 8
