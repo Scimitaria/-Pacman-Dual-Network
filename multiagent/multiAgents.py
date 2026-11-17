@@ -671,7 +671,7 @@ class QLearningAgent(Agent):
         self.alpha   = 0.2 # learning rate    - determines impact of new information
         self.gamma   = 0.8 # discount         - balances immediate and future rewards
         self.epsilon = 0.3 # exploration prob - decides whether a random action is chosen
-        self.epochs  = 10000 
+        self.epochs  = 1000 
         self.gameDepth = 100
         self.syncEvery = 10
         self.cores = 8
@@ -786,13 +786,13 @@ class QLearningAgent(Agent):
         (px,py) = state.getPacmanPosition()
         (fx,fy) = getClosestFood(state)
         #t_state = ((px,py),(fx-px,fy-py))
-        food     = tuple(self.getAStarDirection((px,py),(fx, fy), state))
+        food     = self.getAStarDirection((px,py),(fx, fy), state)
         capsules = tuple(self.getAStarDirection((px,py), c, state) for c in state.getCapsules())
         ghosts   = tuple(
             (self.getAStarDirection((px,py), g.getPosition(), state), getDistanceClass((px,py), g.getPosition(), state), g.scaredTimer>1)
             for g in state.getGhostStates()
         )
-        # e.g. ((1,0), ("West",), (("East","near",False), ("North","far",True)))
+        # e.g. ("North", ("West",), (("East","near",False), ("North","far",True)))
         return (food, capsules, ghosts)
 
     def getPolicyQs(self, state):
